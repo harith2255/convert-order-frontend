@@ -1,3 +1,7 @@
+/**
+ * MAPPING PAGE - Column Mapping Interface
+ * Compatible with production backend template structure
+ */
 import React, { useEffect, useState } from "react";
 import {
   ArrowRight,
@@ -29,14 +33,16 @@ interface ValidationError {
   message: string;
 }
 
-/* 🔒 CANONICAL REQUIRED COLUMNS */
-const REQUIRED_COLUMNS = ["itemdesc", "orderqty"];
+/* 🔒 CANONICAL REQUIRED COLUMNS - Match backend template */
+const REQUIRED_COLUMNS = ["ITEMDESC", "ORDERQTY"];
+
+/* ⚠️ Fields to ignore in mapping UI */
+const IGNORE_FIELDS = ["sl no", "s.no", "sr no", "free", "amount", "value", "rate", "tax", "total"];
 
 export function MappingPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  
   const [extractedFields, setExtractedFields] = useState<ExtractedField[]>([]);
   const [mappings, setMappings] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -45,62 +51,89 @@ export function MappingPage() {
   const [standardColumns, setStandardColumns] = useState<
     Array<{ value: string; label: string }>
   >([]);
-  const [validationErrors, setValidationErrors] = useState<ValidationError[]>(
-    []
-  );
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [lockedFields, setLockedFields] = useState<Set<string>>(new Set());
-const parsedResult = location.state?.parsedResult;
+  
+  const parsedResult = location.state?.parsedResult;
 
-  /* ---------------- FETCH EXTRACTED FIELDS ---------------- */
- useEffect(() => {
-  if (!parsedResult) {
-    toast.error("No parsed data found. Please re-upload.");
-    navigate("/upload");
-    return;
-  }
-
-  setUploadId(parsedResult.uploadId);
-  setExtractedFields(parsedResult.extractedFields);
-
-  const initial: Record<string, string> = {};
-  const locked = new Set<string>();
-
-  parsedResult.extractedFields.forEach((f: ExtractedField) => {
-    initial[f.id] = f.autoMapped || "";
-    if (f.confidence === "high" && f.autoMapped) {
-      locked.add(f.id);
-    }
-  });
-
-  setMappings(initial);
-  setLockedFields(locked);
-  setLoading(false);
-}, [parsedResult, navigate]);
-
-
-  /* ---------------- LOAD STANDARD COLUMNS ---------------- */
+  /* ---------------- LOAD TEMPLATE COLUMNS ---------------- */
   useEffect(() => {
     const loadTemplate = async () => {
       try {
         const res = await api.get("/orders/template");
+        
+        // Backend returns UPPERCASE columns: CODE, CUSTOMER NAME, SAPCODE, etc.
+        const columns = Array.isArray(res.data.columns) 
+          ? res.data.columns 
+          : ["CODE", "CUSTOMER NAME", "SAPCODE", "ITEMDESC", "ORDERQTY", "BOX PACK", "PACK", "DVN"];
+        
         setStandardColumns([
-          { value: "", label: "Select column..." },
-          ...res.data.columns.map((col: string) => ({
+          { value: "", label: "-- Do Not Map --" },
+          ...columns.map((col: string) => ({
             value: col,
-            label: col,
+            label: col.charAt(0) + col.slice(1).toLowerCase(), // Display: "Code", "Customer name"
           })),
         ]);
       } catch (err) {
-        console.error(err);
+        console.error("Template load error:", err);
         toast.error("Failed to load training template");
+        
+        // Fallback to hardcoded template
+        setStandardColumns([
+          { value: "", label: "-- Do Not Map --" },
+          { value: "CODE", label: "Code" },
+          { value: "CUSTOMER NAME", label: "Customer Name" },
+          { value: "SAPCODE", label: "SAP Code" },
+          { value: "ITEMDESC", label: "Item Description" },
+          { value: "ORDERQTY", label: "Order Quantity" },
+          { value: "BOX PACK", label: "Box Pack" },
+          { value: "PACK", label: "Pack" },
+          { value: "DVN", label: "Division" },
+        ]);
       }
     };
 
     loadTemplate();
   }, []);
 
-  /* ---------------- RESTORE UPLOAD ID FROM SESSION ---------------- */
+  /* ---------------- INITIALIZE EXTRACTED FIELDS ---------------- */
+  useEffect(() => {
+    if (!parsedResult) {
+      toast.error("No parsed data found. Please re-upload.");
+      navigate("/upload");
+      return;
+    }
 
+    setUploadId(parsedResult.uploadId);
+
+    // Filter out ignored fields
+    const filtered = (parsedResult.extractedFields || []).filter((f: ExtractedField) => {
+      const fieldLower = f.fieldName.toLowerCase();
+      return !IGNORE_FIELDS.some(ignored => fieldLower.includes(ignored));
+    });
+
+    setExtractedFields(filtered);
+
+    // Initialize mappings
+    const initial: Record<string, string> = {};
+    const locked = new Set<string>();
+
+    filtered.forEach((f: ExtractedField) => {
+      // Backend already provides autoMapped in UPPERCASE format
+      initial[f.id] = f.autoMapped || "";
+      
+      // Lock high-confidence mappings
+      if (f.confidence === "high" && f.autoMapped) {
+        locked.add(f.id);
+      }
+    });
+
+    setMappings(initial);
+    setLockedFields(locked);
+    setLoading(false);
+  }, [parsedResult, navigate]);
+
+  /* ---------------- HELPER FUNCTIONS ---------------- */
   const isMetaField = (fieldId: string) => fieldId.startsWith("__meta_");
 
   const toggleLock = (fieldId: string) => {
@@ -118,62 +151,125 @@ const parsedResult = location.state?.parsedResult;
   /* ---------------- HANDLE MAPPING CHANGE ---------------- */
   const handleMappingChange = (fieldId: string, value: string) => {
     setMappings((prev) => ({ ...prev, [fieldId]: value }));
-    // Clear validation errors when user makes changes
     setValidationErrors([]);
   };
 
-  /* ---------------- VALIDATE BEFORE CONVERT ---------------- */
-  const validateMappings = (): boolean => {
+  /* ---------------- VALIDATE MAPPINGS ---------------- */
+  const validateMappings = (mappingsToValidate: Record<string, string>): ValidationError[] => {
     const errors: ValidationError[] = [];
 
-    // Filter out meta fields and empty mappings
-    const normalizedMappings = Object.entries(mappings)
-      .filter(
-        ([key, value]) => !key.startsWith("__meta_") && value && value.trim()
-      )
+    // Get all non-empty, non-meta mappings
+    const activeMappings = Object.entries(mappingsToValidate)
+      .filter(([key, value]) => !key.startsWith("__meta_") && value && value.trim())
       .map(([key, value]) => ({
-        original: key,
-        normalized: normalizeKey(value),
+        fieldId: key,
+        column: value.toUpperCase() // Normalize to uppercase for comparison
       }));
 
-    /* ---------------- REQUIRED COLUMNS CHECK ---------------- */
-    for (const col of REQUIRED_COLUMNS) {
-      const normalizedCol = normalizeKey(col);
-      const found = normalizedMappings.some(
-        (m) => m.normalized === normalizedCol
-      );
-
+    /* Check 1: Required columns present */
+    for (const required of REQUIRED_COLUMNS) {
+      const found = activeMappings.some(m => m.column === required);
       if (!found) {
         errors.push({
-          field: col,
-          message: `Required mapping missing: ${col}`,
+          field: required,
+          message: `Required column missing: ${required}`
         });
       }
     }
 
-    /* ---------------- DUPLICATE CHECK ---------------- */
-    const values = normalizedMappings.map((m) => m.normalized);
-    const duplicates = values.filter((v, i) => values.indexOf(v) !== i);
-
-    if (duplicates.length) {
-      const uniqueDuplicates = [...new Set(duplicates)];
+    /* Check 2: No duplicate mappings */
+    const columns = activeMappings.map(m => m.column);
+    const duplicates = columns.filter((col, idx) => columns.indexOf(col) !== idx);
+    
+    if (duplicates.length > 0) {
+      const unique = [...new Set(duplicates)];
       errors.push({
         field: "duplicate",
-        message: `Duplicate mappings detected: ${uniqueDuplicates.join(", ")}`,
+        message: `Duplicate mappings: ${unique.join(", ")}`
       });
     }
 
-    /* ---------------- EMPTY VALUE CHECK ---------------- */
+    return errors;
+  };
 
-
-    setValidationErrors(errors);
-
-    if (errors.length > 0) {
-      errors.forEach((error) => toast.error(error.message));
-      return false;
+  /* ---------------- CONVERT ---------------- */
+  const handleConvert = async () => {
+    if (!uploadId) {
+      toast.error("Invalid upload session. Please re-upload the file.");
+      navigate("/upload");
+      return;
     }
 
-    return true;
+    // Step 1: Build repaired mappings
+    const repairedMappings: Record<string, string> = { ...mappings };
+
+    // Try to auto-map missing required columns
+    REQUIRED_COLUMNS.forEach((required) => {
+      const exists = Object.values(repairedMappings).some(
+        (v) => v.toUpperCase() === required
+      );
+
+      if (!exists) {
+        const candidate = extractedFields.find(
+          (f) => f.autoMapped.toUpperCase() === required
+        );
+
+        if (candidate) {
+          repairedMappings[candidate.id] = required;
+          toast.info(`Auto-mapped ${candidate.fieldName} → ${required}`);
+        }
+      }
+    });
+
+    // Step 2: Validate
+    const errors = validateMappings(repairedMappings);
+
+    if (errors.length > 0) {
+      setValidationErrors(errors);
+      errors.forEach((e) => toast.error(e.message));
+      return;
+    }
+
+    // Step 3: Update UI with repaired mappings
+    setMappings(repairedMappings);
+
+    // Step 4: Build clean mappings for backend (remove meta fields, empty values)
+    const cleanMappings: Record<string, string> = {};
+    Object.entries(repairedMappings).forEach(([key, value]) => {
+      if (!key.startsWith("__meta_") && value?.trim()) {
+        // Send uppercase column names to backend
+        cleanMappings[key] = value.toUpperCase();
+      }
+    });
+
+    // Step 5: Send to backend
+    try {
+      setConverting(true);
+
+      const res = await api.post("/orders/convert", {
+        uploadId,
+       
+      });
+
+      toast.success(`✅ ${res.data.recordsProcessed} records converted successfully`);
+      
+      // Navigate to result page
+      navigate(`/result/${res.data.uploadId}`);
+      
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.message || "Conversion failed";
+      toast.error(errorMessage);
+      
+      // Show detailed errors if available
+      if (err.response?.data?.errors) {
+        const errorList = err.response.data.errors.slice(0, 3);
+        errorList.forEach((e: any) => {
+          toast.error(`Row ${e.rowNumber}: ${e.error}`);
+        });
+      }
+    } finally {
+      setConverting(false);
+    }
   };
 
   /* ---------------- RESET STATE ---------------- */
@@ -186,94 +282,7 @@ const parsedResult = location.state?.parsedResult;
     setLockedFields(new Set());
   };
 
-  /* ---------------- CONVERT ---------------- */
-const handleConvert = async () => {
-  if (!uploadId) {
-    toast.error("Invalid upload session. Please re-upload the file.");
-    navigate("/upload");
-    return;
-  }
-
-  /* 1️⃣ Build repaired mappings (SYNC) */
-  const repairedMappings: Record<string, string> = { ...mappings };
-
-  REQUIRED_COLUMNS.forEach((required) => {
-    const exists = Object.values(repairedMappings).some(
-      (v) => normalizeKey(v) === normalizeKey(required)
-    );
-
-    if (!exists) {
-      const candidate = extractedFields.find(
-        (f) => normalizeKey(f.autoMapped) === normalizeKey(required)
-      );
-
-      if (candidate) {
-        repairedMappings[candidate.id] = required;
-      }
-    }
-  });
-
-  /* 2️⃣ Validate repaired mappings */
-  const errors: ValidationError[] = [];
-
-  const normalizedValues = Object.entries(repairedMappings)
-    .filter(([key, val]) => !key.startsWith("__meta_") && val?.trim())
-    .map(([_, val]) => normalizeKey(val));
-
-  for (const col of REQUIRED_COLUMNS) {
-    if (!normalizedValues.includes(normalizeKey(col))) {
-      errors.push({
-        field: col,
-        message: `Required mapping missing: ${col}`,
-      });
-    }
-  }
-
-  if (new Set(normalizedValues).size !== normalizedValues.length) {
-    errors.push({
-      field: "duplicate",
-      message: "Duplicate mappings detected",
-    });
-  }
-
-  if (errors.length) {
-    setValidationErrors(errors);
-    errors.forEach((e) => toast.error(e.message));
-    return;
-  }
-
-  /* 3️⃣ Commit repaired mappings to UI */
-  setMappings(repairedMappings);
-
-  /* 4️⃣ Build clean mappings for backend */
-  const cleanMappings: Record<string, string> = {};
-  Object.entries(repairedMappings).forEach(([key, value]) => {
-    if (!key.startsWith("__meta_") && value?.trim()) {
-      cleanMappings[key] = normalizeKey(value);
-    }
-  });
-
-  try {
-    setConverting(true);
-
-    const res = await api.post("/orders/convert", {
-      uploadId,
-      mappings: cleanMappings,
-    });
-
-    toast.success("File converted successfully");
-    navigate(`/result/${res.data.uploadId}`);
-  } catch (err: any) {
-    toast.error(
-      err.response?.data?.message || "Conversion failed. Please try again."
-    );
-  } finally {
-    setConverting(false);
-  }
-};
-
-const IGNORE_FIELDS = ["sl no", "free", "amount", "tax", "rate"];
-
+  /* ---------------- LOADING STATE ---------------- */
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -282,21 +291,24 @@ const IGNORE_FIELDS = ["sl no", "free", "amount", "tax", "rate"];
     );
   }
 
-  const highConfidence = extractedFields.filter((f) => f.confidence === "high")
-    .length;
-  const mediumConfidence = extractedFields.filter(
-    (f) => f.confidence === "medium"
-  ).length;
-  const lowConfidence = extractedFields.filter((f) => f.confidence === "low")
-    .length;
+  /* ---------------- STATS ---------------- */
+  const highConfidence = extractedFields.filter((f) => f.confidence === "high").length;
+  const mediumConfidence = extractedFields.filter((f) => f.confidence === "medium").length;
+  const lowConfidence = extractedFields.filter((f) => f.confidence === "low").length;
 
+  const mappedCount = Object.values(mappings).filter(v => v && v.trim()).length;
+  const requiredMapped = REQUIRED_COLUMNS.filter(req => 
+    Object.values(mappings).some(v => v.toUpperCase() === req)
+  ).length;
+
+  /* ---------------- RENDER ---------------- */
   return (
     <div className="space-y-6 max-w-6xl mx-auto p-6">
       {/* PAGE HEADER */}
       <div>
         <h1 className="text-3xl font-bold text-neutral-900">Column Mapping</h1>
         <p className="text-neutral-600 mt-1">
-          Map your file columns to the standard training Excel format
+          Map your file columns to the pharmaceutical training template
         </p>
       </div>
 
@@ -321,19 +333,37 @@ const IGNORE_FIELDS = ["sl no", "free", "amount", "tax", "rate"];
         </Card>
       )}
 
-      {/* BUSINESS RULES */}
+      {/* MAPPING STATUS */}
       <Card>
         <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
           <Info className="w-5 h-5 text-blue-600 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-medium mb-2 text-blue-900">Mapping Status</p>
+            <div className="flex flex-wrap gap-4 text-sm text-blue-800">
+              <div>
+                <span className="font-medium">{mappedCount}</span> of {extractedFields.length} fields mapped
+              </div>
+              <div>
+                <span className="font-medium">{requiredMapped}</span> of {REQUIRED_COLUMNS.length} required columns mapped
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* BUSINESS RULES */}
+      <Card>
+        <div className="flex items-start gap-3 p-4 bg-amber-50 rounded-lg border border-amber-200">
+          <CheckCircle2 className="w-5 h-5 text-amber-600 mt-0.5" />
           <div className="text-sm">
-            <p className="font-medium mb-2 text-blue-900">
-              Business Rules Applied
+            <p className="font-medium mb-2 text-amber-900">
+              Template Requirements
             </p>
-            <ul className="list-disc list-inside space-y-1 text-blue-800">
-              <li>Missing Box / Pack values default to 0</li>
-              <li>Missing SAP / DVN values are left blank</li>
-              <li>Mandatory fields (ItemDesc, OrderQty) must be mapped</li>
-              <li>High-confidence mappings are locked by default (click to unlock)</li>
+            <ul className="list-disc list-inside space-y-1 text-amber-800">
+              <li><strong>Required:</strong> ITEMDESC (Item Description), ORDERQTY (Order Quantity)</li>
+              <li><strong>Optional:</strong> CODE, CUSTOMER NAME, SAPCODE, BOX PACK, PACK, DVN</li>
+              <li>High-confidence mappings are locked by default (click 🔒 to unlock)</li>
+              <li>Empty columns will be filled with defaults (0 for numbers, blank for text)</li>
             </ul>
           </div>
         </div>
@@ -346,44 +376,44 @@ const IGNORE_FIELDS = ["sl no", "free", "amount", "tax", "rate"];
           <div className="col-span-3">Extracted Field</div>
           <div className="col-span-3">Sample Value</div>
           <div className="col-span-1 text-center">Confidence</div>
-          <div className="col-span-4">Standard Column</div>
+          <div className="col-span-4">Map To Template</div>
           <div className="col-span-1 text-center">Lock</div>
         </div>
 
         {/* ROWS */}
         <div className="space-y-3 mt-4">
-          {extractedFields
-  .filter(f => !IGNORE_FIELDS.includes(f.fieldName.toLowerCase()))
-  .map((field) => {
+          {extractedFields.map((field) => {
             const meta = isMetaField(field.id);
             const isLocked = lockedFields.has(field.id);
-            const confidenceColor =
-              field.confidence === "high"
-                ? "text-green-600"
-                : field.confidence === "medium"
-                ? "text-yellow-600"
-                : "text-red-600";
+            const isMapped = mappings[field.id] && mappings[field.id].trim();
 
             return (
               <div
                 key={field.id}
-                className={`grid grid-cols-12 gap-4 items-center p-3 rounded-lg ${
-                  isLocked ? "bg-gray-50" : "bg-white"
-                } border`}
+                className={`grid grid-cols-12 gap-4 items-center p-3 rounded-lg border transition-all ${
+                  isLocked 
+                    ? "bg-gray-50 border-gray-300" 
+                    : isMapped
+                    ? "bg-green-50 border-green-200"
+                    : "bg-white border-gray-200"
+                }`}
               >
+                {/* Field Name */}
                 <div className="col-span-3">
                   <div className="font-medium text-neutral-900">
                     {field.fieldName}
                   </div>
                   {meta && (
-                    <span className="text-xs text-blue-600">(Header)</span>
+                    <span className="text-xs text-blue-600">(From Header)</span>
                   )}
                 </div>
 
-                <div className="col-span-3 text-sm text-neutral-600 truncate">
-                  {field.sampleValue}
+                {/* Sample Value */}
+                <div className="col-span-3 text-sm text-neutral-600 truncate" title={field.sampleValue}>
+                  {field.sampleValue || "(empty)"}
                 </div>
 
+                {/* Confidence Badge */}
                 <div className="col-span-1 text-center">
                   <Badge
                     variant={
@@ -398,6 +428,7 @@ const IGNORE_FIELDS = ["sl no", "free", "amount", "tax", "rate"];
                   </Badge>
                 </div>
 
+                {/* Dropdown */}
                 <div className="col-span-4">
                   <Dropdown
                     options={standardColumns}
@@ -409,12 +440,13 @@ const IGNORE_FIELDS = ["sl no", "free", "amount", "tax", "rate"];
                   />
                 </div>
 
+                {/* Lock Button */}
                 <div className="col-span-1 flex justify-center">
                   {!meta && (
                     <button
                       onClick={() => toggleLock(field.id)}
-                      className="p-1 hover:bg-gray-100 rounded"
-                      title={isLocked ? "Unlock mapping" : "Lock mapping"}
+                      className="p-1 hover:bg-gray-100 rounded transition-colors"
+                      title={isLocked ? "Unlock to edit" : "Lock mapping"}
                     >
                       {isLocked ? (
                         <Lock className="w-4 h-4 text-gray-600" />
@@ -429,7 +461,7 @@ const IGNORE_FIELDS = ["sl no", "free", "amount", "tax", "rate"];
           })}
         </div>
 
-        {/* SUMMARY */}
+        {/* SUMMARY FOOTER */}
         <div className="mt-6 pt-6 border-t flex justify-between items-center">
           <div className="flex gap-3">
             <Badge variant="success">{highConfidence} High</Badge>
@@ -445,16 +477,20 @@ const IGNORE_FIELDS = ["sl no", "free", "amount", "tax", "rate"];
                 navigate("/upload");
               }}
             >
-              Back
+              Back to Upload
             </Button>
             <Button
               onClick={handleConvert}
-              disabled={converting || !uploadId}
-              title={
-                !uploadId ? "Upload session missing. Re-upload file." : ""
-              }
+             
             >
-              {converting ? "Converting..." : "Convert to Excel"}
+              {converting ? (
+                <>Converting...</>
+              ) : (
+                <>
+                  Convert to Excel
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </>
+              )}
             </Button>
           </div>
         </div>

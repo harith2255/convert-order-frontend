@@ -78,13 +78,18 @@ export default function App() {
           <Routes>
             {/* USER ROUTES */}
             <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <UserDashboard />
-                </ProtectedRoute>
-              }
-            />
+  path="/"
+  element={
+    <ProtectedRoute>
+      {user.role === "admin" ? (
+        <Navigate to="/admin" replace />
+      ) : (
+        <UserDashboard />
+      )}
+    </ProtectedRoute>
+  }
+/>
+
             <Route
               path="/upload"
               element={

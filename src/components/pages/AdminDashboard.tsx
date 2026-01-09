@@ -38,43 +38,66 @@ const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
 const [recentUploads, setRecentUploads] = useState<any[]>([]);
 const [exporting, setExporting] = useState(false);
-  useEffect(() => {
-    const loadDashboard = async () => {
-      try {
-      const data = await fetchAdminDashboard();
+
+  const loadDashboard = async () => {
+    try {
+    const data = await fetchAdminDashboard();
 
 setStats(data.stats);
 setAlerts(data.alerts);
-setRecentActivity(data.recentActivity);
+setRecentActivity(
+  (data.recentActivity || []).map((a: any) => ({
+    user: a.user || "System",
+    action: a.action || "UNKNOWN",
+    status: a.status || "Success",
+    time: new Date(a.time).toLocaleString(),
+  }))
+);
+
 
 setRecentUploads(
   (data.recentUploads || []).map((u: any) => ({
-
     file: u.fileName,
     user: u.userEmail,
     status: u.status,
-    processed: u.recordsProcessed || 0,
-    failed: u.recordsFailed || 0,
+    processed: u.recordsProcessed ?? 0,
+    failed: u.recordsFailed ?? 0,
     time: new Date(u.createdAt).toLocaleString(),
   }))
 );
 
-      } catch (err) {
-        toast.error("Failed to load admin dashboard");
-      }
-    };
 
+    } catch (err) {
+      toast.error("Failed to load admin dashboard");
+    }
+  };
+
+  useEffect(() => {
     loadDashboard();
+    
   }, []);
 
-  const uploadColumns = [
+  useEffect(() => {
+    const interval = setInterval(loadDashboard, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+ const uploadColumns = [
   { key: "file", label: "File Name" },
   { key: "user", label: "Uploaded By" },
   {
     key: "status",
     label: "Status",
     render: (value: string) => (
-      <Badge variant={value === "CONVERTED" ? "success" : value === "FAILED" ? "error" : "info"}>
+      <Badge
+        variant={
+          value === "CONVERTED"
+            ? "success"
+            : value === "FAILED"
+            ? "error"
+            : "info"
+        }
+      >
         {value}
       </Badge>
     ),
@@ -83,6 +106,7 @@ setRecentUploads(
   { key: "failed", label: "Failed" },
   { key: "time", label: "Uploaded At" },
 ];
+
 const activityColumns = [
   { key: "user", label: "User" },
   { key: "action", label: "Action" },
