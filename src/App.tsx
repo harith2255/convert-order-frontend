@@ -14,9 +14,9 @@ import { HistoryPage } from "./components/pages/HistoryPage.tsx";
 import { AdminDashboard } from "./components/pages/AdminDashboard.tsx";
 import { MappingRulesPage } from "./components/pages/MappingRulesPage.tsx";
 import { UserAccessPage } from "./components/pages/UserAccessPage.tsx";
+import ProtectedRoute from "./components/ProtectedRoutes.tsx";
 
 import { useAuth } from "./context/AuthContext.tsx";
-import ProtectedRoute from "./components/ProtectedRoutes.tsx";
 
 export default function App() {
   const { user, loading, logout } = useAuth();
