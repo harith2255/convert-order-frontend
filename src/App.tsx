@@ -16,7 +16,7 @@ import { MappingRulesPage } from "./components/pages/MappingRulesPage";
 import { UserAccessPage } from "./components/pages/UserAccessPage";
 
 import { useAuth } from "./context/AuthContext";
-import ProtectedRoute from "./components/protectedRoutes";
+import ProtectedRoute from "./components/ProtectedRoutes";
 
 export default function App() {
   const { user, loading, logout } = useAuth();
