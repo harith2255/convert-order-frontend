@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 
 /* ---------------- GET ALL USERS ---------------- */
 
-import OrderUpload from "../../models/OrderUpload.js";
+import OrderUpload from "../../models/orderUpload.js";
 
 /* ---------------- GET ALL USERS ---------------- */
 export const getUsers = async (req, res) => {
