@@ -3,8 +3,8 @@
  * Enforces strict 8-column template compliance
  */
 
-import OrderUpload from "../models/OrderUpload.js";
-import MappingRule from "../models/mappingRules.js";
+import OrderUpload from "../models/orderUpload.js";
+
 import XLSX from "xlsx";
 import crypto from "crypto";
 import path from "path";

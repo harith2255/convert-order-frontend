@@ -1,5 +1,5 @@
 import User from "../../models/User.js";
-import OrderUpload from "../../models/OrderUpload.js";
+import OrderUpload from "../../models/orderUpload.js";
 import MappingRule from "../../models/mappingRules.js";
 import SystemAlert from "../../models/systemAlerts.js";
 import ActivityLog from "../../models/activityLogs.js";
