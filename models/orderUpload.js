@@ -27,6 +27,16 @@ const orderUploadSchema = new mongoose.Schema(
     extractedData: {
       type: mongoose.Schema.Types.Mixed,
     },
+convertedData: {
+  headers: {
+    type: [String],
+    default: [],
+  },
+  rows: {
+    type: [mongoose.Schema.Types.Mixed],
+    default: [],
+  },
+},
 
     status: {
       type: String,

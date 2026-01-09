@@ -130,14 +130,16 @@ export const convertOrders = async (req, res, next) => {
   const startTime = Date.now();
 
   try {
-    const { uploadId, mappings } = req.body;
+ const { uploadId } = req.body;
 
-    if (!uploadId || !mappings) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid input: uploadId and mappings required"
-      });
-    }
+if (!uploadId) {
+  return res.status(400).json({
+    success: false,
+    message: "uploadId is required"
+  });
+}
+
+     
 
     const upload = await OrderUpload.findOne({
       _id: uploadId,

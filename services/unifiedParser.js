@@ -151,6 +151,16 @@ function parseProductLineTokens(line) {
     return null;
   }
 
+  // 🔥 CRITICAL: Reject company/division name lines
+  if (/^(?:company\s*name|comapany\s*name|division\s*name)\s*[:\-]/i.test(cleanLine)) {
+    return null;
+  }
+
+  // Reject lines that look like metadata headers
+  if (/^(company|division|comapany)\s*$/i.test(cleanLine)) {
+    return null;
+  }
+
   const tokens = tokenizeLine(cleanLine);
   if (tokens.length < 2) return null;
 
@@ -194,6 +204,20 @@ function parseProductLineTokens(line) {
     // No SAP code, treat everything before QTY as description
     const descTokens = tokens.slice(0, qtyIndex);
     itemdesc = cleanItemDesc(descTokens.join(" "));
+  }
+
+  // 🔥 CRITICAL: Final validation - reject company name patterns
+  if (itemdesc) {
+    // Check if itemdesc looks like a company/division name
+    const companyPatterns = [
+      /^(?:company\s*name|comapany\s*name|division\s*name)/i,
+      /^(?:micro|pharma|labs?|ltd|pvt|limited|inc|corp)/i,
+    ];
+    
+    // If itemdesc is ONLY a company keyword without product info, reject it
+    if (companyPatterns.some(pattern => pattern.test(itemdesc)) && !orderqty) {
+      return null;
+    }
   }
 
   // Validation: Must have at least itemdesc and qty
@@ -254,6 +278,24 @@ export async function extractPurchaseOrderPDF(file) {
         continue;
       }
 
+      // 🔥 CRITICAL: Detect company name lines WITHOUT "Company:" prefix
+      // Example: "Comapany Name : MICRO CARSYON" or just "MICRO CARSYON" in company section
+      if (/^(?:company\s*name|comapany\s*name)\s*[:\-]/i.test(line)) {
+        const nameMatch = line.match(/^(?:company\s*name|comapany\s*name)\s*[:\-]\s*(.+)/i);
+        if (nameMatch) {
+          let dvn = clean(nameMatch[1]);
+          dvn = dvn.replace(/\[approx\s*value\s*:.*?\]/gi, "").trim();
+          currentDVN = dvn;
+          pendingSAPCode = null;
+          continue;
+        }
+      }
+
+      // Skip lines that are clearly company/division labels without colons
+      if (/^(company|division|comapany)\s*$/i.test(line)) {
+        continue;
+      }
+
       // Detect table start
       if (state === PARSING_STATE.OUTSIDE_TABLE) {
         const isHeader = /(sl\s*no|s\.no|sr\s*no).*(code|item|product)/i.test(line) ||
@@ -288,6 +330,17 @@ export async function extractPurchaseOrderPDF(file) {
       const product = parseProductLineTokens(line);
 
       if (product) {
+        // 🔥 CRITICAL: Additional safeguard - reject if itemdesc looks like company name
+        const isCompanyName = /^(?:micro|pharma|carsyon|labs?|division|company)/i.test(product.itemdesc) &&
+                              product.itemdesc.split(/\s+/).length <= 3 &&
+                              !product.sapcode;
+
+        if (isCompanyName) {
+          // This is likely a company name, not a product
+          pendingSAPCode = null;
+          continue;
+        }
+
         // Handle split-row scenario (SAP code on previous line)
         if (pendingSAPCode && !product.sapcode && product.itemdesc && product.orderqty) {
           dataRows.push([
