@@ -18,6 +18,7 @@ import { Button } from "../Button";
 import { StatCard } from "../StatCard";
 import { Table } from "../Table";
 import { Badge } from "../Badge";
+import api from "../../services/api";
 
 interface AdminDashboardProps {
   onNavigate: (page: string) => void;
@@ -36,41 +37,56 @@ const [stats, setStats] = useState<DashboardStats | null>(null);
 
   const [alerts, setAlerts] = useState<any[]>([]);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
-const [recentUploads, setRecentUploads] = useState<any[]>([]);
+
 const [exporting, setExporting] = useState(false);
 
-  const loadDashboard = async () => {
-    try {
+const [uploads, setUploads] = useState<any[]>([]);
+const [page, setPage] = useState(1);
+const [pagination, setPagination] = useState<any>(null);
+
+const loadUploads = async (pageNo = 1) => {
+  const res = await api.get("/admin/uploads", {
+    params: { page: pageNo, limit: 10 },
+  });
+
+  setUploads(
+    res.data.data.map((u: any) => ({
+      file: u.fileName,
+      user: u.userEmail,
+      status: u.status,
+      processed: u.recordsProcessed ?? 0,
+      failed: u.recordsFailed ?? 0,
+      time: new Date(u.createdAt).toLocaleString(),
+    }))
+  );
+
+  setPagination(res.data.pagination);
+  setPage(pageNo);
+};
+
+useEffect(() => {
+  loadUploads(1);
+}, []);
+
+ const loadDashboard = async () => {
+  try {
     const data = await fetchAdminDashboard();
 
-setStats(data.stats);
-setAlerts(data.alerts);
-setRecentActivity(
-  (data.recentActivity || []).map((a: any) => ({
-    user: a.user || "System",
-    action: a.action || "UNKNOWN",
-    status: a.status || "Success",
-    time: new Date(a.time).toLocaleString(),
-  }))
-);
+    setStats(data.stats);
+    setAlerts(data.alerts);
 
-
-setRecentUploads(
-  (data.recentUploads || []).map((u: any) => ({
-    file: u.fileName,
-    user: u.userEmail,
-    status: u.status,
-    processed: u.recordsProcessed ?? 0,
-    failed: u.recordsFailed ?? 0,
-    time: new Date(u.createdAt).toLocaleString(),
-  }))
-);
-
-
-    } catch (err) {
-      toast.error("Failed to load admin dashboard");
-    }
-  };
+    setRecentActivity(
+      (data.recentActivity || []).map((a: any) => ({
+        user: a.user || "System",
+        action: a.action || "UNKNOWN",
+        status: a.status || "Success",
+        time: new Date(a.time).toLocaleString(),
+      }))
+    );
+  } catch {
+    toast.error("Failed to load admin dashboard");
+  }
+};
 
   useEffect(() => {
     loadDashboard();
@@ -268,19 +284,44 @@ const activityColumns = [
       </div>
 
       {/* Activity */}
-      <Card>
+      {/* <Card>
         <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
         <Table columns={activityColumns} data={recentActivity} />
-      </Card>
-      <Card>
+      </Card> */}
+<Card>
   <h3 className="text-lg font-semibold mb-4">Recent Uploads</h3>
 
-  {recentUploads.length === 0 ? (
+  {uploads.length === 0 ? (
     <p className="text-sm text-neutral-500">No uploads yet</p>
   ) : (
-    <Table columns={uploadColumns} data={recentUploads} />
+    <Table columns={uploadColumns} data={uploads} />
   )}
+
+  <div className="flex justify-between items-center mt-4">
+    <Button
+      size="sm"
+      variant="secondary"
+      disabled={!pagination?.hasPrev}
+      onClick={() => loadUploads(page - 1)}
+    >
+      Previous
+    </Button>
+
+    <span className="text-sm text-neutral-600">
+      Page {pagination?.page} of {pagination?.totalPages}
+    </span>
+
+    <Button
+      size="sm"
+      variant="secondary"
+      disabled={!pagination?.hasNext}
+      onClick={() => loadUploads(page + 1)}
+    >
+      Next
+    </Button>
+  </div>
 </Card>
+
 
     </div>
   );
