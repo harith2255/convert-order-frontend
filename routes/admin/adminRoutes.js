@@ -7,7 +7,7 @@ const router = express.Router();
 
 router.post("/users", protect, adminOnly, addUser);
 router.get(
-  "/admin/uploads",
+  "/uploads",
   protect,
   adminOnly,
   getRecentUploadsPaginated
