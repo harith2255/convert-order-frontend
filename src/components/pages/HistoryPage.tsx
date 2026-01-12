@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Download, Eye, RefreshCw } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { Input } from '../Input';
@@ -11,18 +12,15 @@ import api from '../../services/api';
 import { toast } from 'sonner';
 import { downloadOrderFile } from '../../services/orderApi';
 
-interface HistoryPageProps {
-  onNavigate: (page: string) => void;
-}
-
-export function HistoryPage({ onNavigate }: HistoryPageProps) {
+export function HistoryPage() {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedLog, setSelectedLog] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [downloading, setDownloading] = useState<string | null>(null); // Track which file is downloading
+  const [downloading, setDownloading] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(fetchHistory, 400);
@@ -37,7 +35,6 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
           status: statusFilter === "all" ? "all" : statusFilter.toUpperCase(),
         },
       });
-
       setHistory(res.data.history);
     } catch {
       toast.error("Failed to load history");
@@ -46,14 +43,15 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
     }
   };
 
-  const filteredData = history;
+  const handleViewDetails = (row: any) => {
+    navigate(`/result/${row.id}`);
+  };
 
   const handleViewLog = (row: any) => {
     setSelectedLog(row);
     setIsModalOpen(true);
   };
 
-  // Same download function as ResultPage
   const handleDownload = async (uploadId: string) => {
     if (!uploadId) return;
 
@@ -70,19 +68,38 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
   };
 
   const columns = [
-    { key: 'fileName', label: 'File Name' },
-    { key: 'uploadDate', label: 'Upload Date' },
+    { 
+      key: 'fileName', 
+      label: 'File Name',
+      render: (value: string, row: any) => (
+        <button
+          onClick={() => handleViewDetails(row)}
+          className="text-primary-600 hover:text-primary-700 hover:underline text-left"
+        >
+          {value}
+        </button>
+      )
+    },
+    { 
+      key: 'uploadDate', 
+      label: 'Upload Date',
+      render: (value: string) => new Date(value).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    },
     {
       key: 'status',
       label: 'Status',
       render: (value: string) => (
         <Badge
           variant={
-            value === "CONVERTED"
-              ? "success"
-              : value === "FAILED"
-              ? "error"
-              : "neutral"
+            value === "CONVERTED" ? "success" 
+            : value === "FAILED" ? "error" 
+            : "neutral"
           }
         >
           {value}
@@ -96,7 +113,6 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
         <span>{value} / {value + (row.recordsFailed ?? 0)}</span>
       )
     },
-    { key: 'processingTime', label: 'Time' },
     {
       key: 'actions',
       label: 'Actions',
@@ -109,6 +125,7 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
               e.stopPropagation();
               handleViewLog(row);
             }}
+            title="View Details"
           >
             <Eye className="w-4 h-4" />
           </Button>
@@ -121,6 +138,7 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
                 handleDownload(row.id);
               }}
               disabled={downloading === row.id}
+              title="Download File"
             >
               {downloading === row.id ? (
                 <RefreshCw className="w-4 h-4 animate-spin" />
@@ -136,9 +154,9 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
 
   if (loading) {
     return (
-      <p className="text-neutral-600 text-center py-10">
-        Loading order history…
-      </p>
+      <div className="flex items-center justify-center h-64">
+        <p className="text-neutral-600">Loading order history…</p>
+      </div>
     );
   }
 
@@ -198,7 +216,7 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
         <Card padding="sm">
           <p className="text-sm text-neutral-600 mb-1">Total Records</p>
           <p className="text-2xl font-semibold text-neutral-900">
-            {history.reduce((acc, h) => acc + h.recordsProcessed, 0)}
+            {history.reduce((acc, h) => acc + (h.recordsProcessed || 0), 0)}
           </p>
         </Card>
       </div>
@@ -209,24 +227,34 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-neutral-900">Conversion History</h3>
             <div className="text-sm text-neutral-600">
-              Showing {filteredData.length} of {history.length} conversions
+              {history.length} total conversion{history.length !== 1 ? 's' : ''}
             </div>
           </div>
         </div>
-        <Table columns={columns} data={filteredData} />
-        <div className="p-4 border-t border-neutral-200 bg-neutral-50">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-neutral-600">Showing 1-{filteredData.length} of {filteredData.length}</p>
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" size="sm" disabled>
-                Previous
-              </Button>
-              <Button variant="secondary" size="sm" disabled>
-                Next
-              </Button>
+        {history.length > 0 ? (
+          <>
+            <Table columns={columns} data={history} />
+            <div className="p-4 border-t border-neutral-200 bg-neutral-50">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-neutral-600">
+                  Showing {history.length} conversion{history.length !== 1 ? 's' : ''}
+                </p>
+              </div>
             </div>
+          </>
+        ) : (
+          <div className="text-center py-12 text-neutral-500">
+            <p>No conversions found</p>
+            <Button 
+              variant="primary" 
+              size="sm" 
+              onClick={() => navigate('/upload')}
+              className="mt-4"
+            >
+              Upload a File
+            </Button>
           </div>
-        </div>
+        )}
       </Card>
 
       {/* Log Details Modal */}
@@ -251,11 +279,19 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
               </div>
               <div>
                 <p className="text-sm text-neutral-600 mb-1">Upload Date</p>
-                <p className="font-medium text-neutral-900">{selectedLog.uploadDate}</p>
+                <p className="font-medium text-neutral-900">
+                  {new Date(selectedLog.uploadDate).toLocaleString()}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-neutral-600 mb-1">Processing Time</p>
-                <p className="font-medium text-neutral-900">{selectedLog.processingTime}</p>
+                <p className="font-medium text-neutral-900">
+                  {selectedLog.processingTime && selectedLog.processingTime !== '-' 
+                    ? typeof selectedLog.processingTime === 'number'
+                      ? `${(selectedLog.processingTime / 1000).toFixed(2)}s`
+                      : selectedLog.processingTime
+                    : 'N/A'}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-neutral-600 mb-1">Records Processed</p>
@@ -269,35 +305,38 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
               </div>
             </div>
 
-            {selectedLog.status === "CONVERTED" && (
-              <div className="pt-4 border-t border-neutral-200">
-                <p className="text-sm text-neutral-600 mb-2">Output File</p>
-                <div className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg border border-neutral-200">
-                  <p className="font-mono text-sm text-neutral-900">
-                    {selectedLog.fileName.replace(/\.[^/.]+$/, "")}-converted.xlsx
-                  </p>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => handleDownload(selectedLog.id)}
-                    disabled={downloading === selectedLog.id}
-                    className="inline-flex items-center gap-2"
-                  >
-                    {downloading === selectedLog.id ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        Downloading...
-                      </>
-                    ) : (
-                      <>
-                        <Download className="w-4 h-4" />
-                        Download
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            )}
+            <div className="flex gap-3 pt-4 border-t border-neutral-200">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setIsModalOpen(false);
+                  handleViewDetails(selectedLog);
+                }}
+                className="flex-1"
+              >
+                View Full Details
+              </Button>
+              {selectedLog.status === "CONVERTED" && (
+                <Button
+                  variant="primary"
+                  onClick={() => handleDownload(selectedLog.id)}
+                  disabled={downloading === selectedLog.id}
+                  className="flex-1 inline-flex items-center justify-center gap-2"
+                >
+                  {downloading === selectedLog.id ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Downloading...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      Download File
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
           </div>
         )}
       </Modal>
