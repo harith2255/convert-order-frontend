@@ -1,5 +1,5 @@
 /**
- * Production-ready PDF Parser
+ * Production-ready PDF Text Extractor
  * File: backend/services/pdfParser.js
  * Dependency: pdfjs-dist
  */
@@ -10,26 +10,16 @@ import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
    CONFIG
 ====================================================== */
 
-const ROW_Y_TOLERANCE = 6;
-
+// Increased tolerance for real-world invoices
+const ROW_Y_TOLERANCE = 9;
 
 /* ======================================================
    HELPERS
 ====================================================== */
 
 function clean(text = "") {
-  return text.replace(/\s+/g, " ").trim();
+  return String(text).replace(/\s+/g, " ").trim();
 }
-
-function cleanItemDesc(text) {
-  return text
-    .replace(/\b(gm|mg|ml|caps?|tabs?|dtf|strip|box|pack)\b/gi, "")
-    .replace(/\s+\d+\s*'?s\b/gi, "")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-}
-
-
 
 /* ======================================================
    CORE PDF EXTRACTION
@@ -50,30 +40,38 @@ export async function extractTextFromPDFAdvanced(buffer) {
     const page = await pdf.getPage(pageNo);
     const content = await page.getTextContent();
 
-    const items = content.items.map(i => ({
-      text: i.str,
-      x: i.transform[4],
-      y: i.transform[5],
-    }));
+    const items = content.items
+      .map(i => ({
+        text: i.str,
+        x: i.transform?.[4] ?? 0,
+        y: i.transform?.[5] ?? 0,
+      }))
+      .filter(i => i.text && i.text.trim());
 
     /* ---------- GROUP BY Y (ROW DETECTION) ---------- */
     const tempRows = [];
 
     for (const item of items) {
-      let row = tempRows.find(r => Math.abs(r.y - item.y) < ROW_Y_TOLERANCE);
+      let row = tempRows.find(r => Math.abs(r.y - item.y) <= ROW_Y_TOLERANCE);
+
       if (!row) {
         row = { y: item.y, cells: [] };
         tempRows.push(row);
       }
+
       row.cells.push(item);
     }
 
     tempRows
-      .sort((a, b) => b.y - a.y)
+      .sort((a, b) => b.y - a.y) // top → bottom
       .forEach(r => {
-        r.cells.sort((a, b) => a.x - b.x);
-        const rawText = clean(r.cells.map(c => c.text).join(" "));
-        if (rawText) {
+        r.cells.sort((a, b) => a.x - b.x); // left → right
+
+        const rawText = clean(
+          r.cells.map(c => c.text).join(" ")
+        );
+
+        if (rawText.length > 1) {
           rows.push({ rawText, cells: r.cells });
           lines.push(rawText);
         }
@@ -85,8 +83,6 @@ export async function extractTextFromPDFAdvanced(buffer) {
   return { rows, lines };
 }
 
-
 export default {
   extractTextFromPDFAdvanced,
-
 };

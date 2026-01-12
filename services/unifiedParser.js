@@ -110,6 +110,17 @@ function extractCustomerName(lines) {
   return "UNKNOWN CUSTOMER";
 }
 
+function isDivisionLine(line) {
+  return (
+    /^[A-Z][A-Z0-9\- ]{5,}$/.test(line) &&      // ALL CAPS
+    !/TOTAL|ORDER|PURCHASE|INVOICE/.test(line)
+  );
+}
+function isDivisionTotal(line) {
+  return /division\s+total/i.test(line);
+}
+
+
 /* ========================================================================
    PRODUCT LINE PARSER
 ======================================================================== */
@@ -269,6 +280,20 @@ export async function extractPurchaseOrderPDF(file) {
         }
       }
 
+      // ✅ DIVISION HEADER (e.g. MICRO-CARDICARE-DIV)
+if (isDivisionLine(line)) {
+  currentDVN = clean(line);
+  pendingSAPCode = null;
+  pendingItemDesc = null;
+  continue;
+}
+
+// ✅ DIVISION TOTAL → ignore, DO NOT stop table
+if (isDivisionTotal(line)) {
+  continue;
+}
+
+
       if (state !== "INSIDE_TABLE") continue;
 
       if (isTableStopLine(line)) {
@@ -289,11 +314,19 @@ export async function extractPurchaseOrderPDF(file) {
           continue;
         }
 
-        if (pendingSAPCode && !product.sapcode && product.itemdesc && product.orderqty) {
-          dataRows.push([customerName, pendingSAPCode, product.itemdesc, product.orderqty, currentDVN]);
-          pendingSAPCode = null;
-          continue;
-        }
+    if (pendingSAPCode && pendingItemDesc && product?.orderqty) {
+  dataRows.push([
+    customerName,
+    pendingSAPCode,
+    pendingItemDesc,
+    product.orderqty,
+    currentDVN
+  ]);
+  pendingSAPCode = null;
+  pendingItemDesc = null;
+  continue;
+}
+
 
         if (product.itemdesc && product.orderqty) {
           dataRows.push([customerName, product.sapcode, product.itemdesc, product.orderqty, currentDVN]);
@@ -355,46 +388,47 @@ export async function extractInvoiceExcel(file) {
     }
 
     const headerIndex = findHeaderRow(rows);
+    let currentDVN = "";
+
     if (headerIndex === -1) {
-      return createEmptyResult("TABLE_HEADER_NOT_FOUND");
+      const customerName = extractCustomerName(
+        rows.slice(0, 10).map(r => r.join(" "))
+      );
+
+      const dataRows = [];
+
+      for (const row of rows) {
+        const cells = row.map(c => clean(String(c || ""))).filter(Boolean);
+        if (!cells.length) continue;
+
+        // ✅ DIVISION ROW
+        if (cells.length === 1 && isDivisionLine(cells[0])) {
+          currentDVN = cells[0];
+          continue;
+        }
+
+        // ❌ Division total
+        if (cells.some(c => isDivisionTotal(c))) continue;
+
+        // Product row: [Item, Pack, Qty]
+        const itemdesc = cleanItemDesc(cells[1] || cells[0]);
+        const qty = validateQty(cells[cells.length - 1]);
+
+        if (itemdesc && qty > 0) {
+          dataRows.push([
+            customerName,
+            "",
+            itemdesc,
+            qty,
+            currentDVN
+          ]);
+        }
+      }
+
+      return createTemplateOutput(dataRows, customerName);
     }
 
-    const metaRows = rows.slice(0, headerIndex);
-    const headers = rows[headerIndex].map((h, i) => 
-      normalizeKey(h) || `column_${i + 1}`
-    );
-
-    const dataRows = rows
-      .slice(headerIndex + 1)
-      .filter(row => row.some(cell => String(cell || "").trim() !== ""));
-
-    if (!dataRows.length) {
-      return createEmptyResult("NO_DATA_ROWS");
-    }
-
-    const customerName = extractCustomerName(metaRows.map(r => r.join(" ")));
-    const mapping = createColumnMapping(headers);
-
-    const transformedRows = dataRows.map(row => {
-      const obj = {};
-      headers.forEach((h, i) => {
-        obj[h] = row[i];
-      });
-
-      return [
-        customerName,
-        String(obj[mapping.sapcode] || "").trim(),
-        cleanItemDesc(String(obj[mapping.itemdesc] || "")),
-        validateQty(obj[mapping.orderqty]),
-        String(obj[mapping.dvn] || "").trim()
-      ];
-    }).filter(row => {
-      const [, , itemdesc, orderqty] = row;
-      return itemdesc && itemdesc.length >= 2 && orderqty > 0;
-    });
-
-    return createTemplateOutput(transformedRows, customerName);
-
+    return createEmptyResult("EXCEL_EXTRACTION_FAILED");
   } catch (err) {
     console.error("❌ Excel extraction failed:", err);
     return createEmptyResult("EXCEL_EXTRACTION_FAILED");
@@ -493,13 +527,23 @@ export async function extractOrderText(file) {
     let state = "OUTSIDE_TABLE";
 
     for (const line of lines) {
-      if (state === "OUTSIDE_TABLE") {
-        if (/(item|product).*(qty|quantity|order)/i.test(line) ||
-            /(code).*(qty|quantity)/i.test(line)) {
-          state = "INSIDE_TABLE";
-          continue;
-        }
-      }
+    if (state === "OUTSIDE_TABLE") {
+  const isHeader =
+    /(sl\s*no|s\.?no|sr\s*no)/i.test(line) ||
+    /(item|product|description|particulars)/i.test(line) &&
+    /(qty|quantity|nos|pcs|order)/i.test(line);
+
+  const looksLikeDataRow =
+    /^\d{4,7}\s+[A-Za-z]/.test(line) ||
+    /^[A-Za-z].*\s+\d+$/.test(line);
+
+  if (isHeader || looksLikeDataRow) {
+    state = "INSIDE_TABLE";
+    pendingSAPCode = null;
+    pendingItemDesc = null;
+  }
+}
+
 
       if (state !== "INSIDE_TABLE") continue;
 
