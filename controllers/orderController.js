@@ -376,7 +376,6 @@ function styleSheet(sheet, dataRowCount) {
 /* ========================================================================
    OTHER ENDPOINTS
 ======================================================================== */
-
 export const getOrderHistory = async (req, res) => {
   const { search, status } = req.query;
 
@@ -398,14 +397,14 @@ export const getOrderHistory = async (req, res) => {
   res.json({
     success: true,
     history: history.map(item => ({
-      id: item._id.toString(), // ✅ Convert ObjectId to string
+      id: item._id.toString(),
       fileName: item.fileName,
-      uploadDate: new Date(item.createdAt).toLocaleString(), // ✅ Format date
+      uploadDate: item.createdAt, // ✅ Send raw date, let frontend format it
       status: item.status,
       recordsProcessed: item.recordsProcessed || 0,
       recordsFailed: item.recordsFailed || 0,
       outputFile: item.outputFile || null,
-      processingTime: item.processingTime || "-"
+      processingTime: item.processingTime || null // ✅ Send null instead of "-"
     }))
   });
 };
