@@ -57,15 +57,23 @@ export function UserDashboard() {
         minute: '2-digit'
       }),
     },
-    {
-      key: 'status',
-      label: 'Status',
-      render: (value: string) => (
-        <Badge variant={value === "CONVERTED" ? "success" : "error"}>
-          {value === "CONVERTED" ? "Success" : "Failed"}
-        </Badge>
-      ),
-    },
+   {
+  key: 'status',
+  label: 'Status',
+  render: (value: string) => {
+    if (value === "CONVERTED") {
+      return <Badge variant="success">Success</Badge>;
+    }
+
+    if (value === "FAILED") {
+      return <Badge variant="error">Failed</Badge>;
+    }
+
+    // Anything else = in progress
+    return <Badge variant="neutral">Processing</Badge>;
+  },
+},
+
     { 
       key: 'recordsProcessed', 
       label: 'Records',
