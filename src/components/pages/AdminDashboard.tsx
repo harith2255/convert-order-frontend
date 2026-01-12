@@ -188,27 +188,31 @@ const activityColumns = [
     try {
       setExporting(true);
 
-      const res = await fetch("/api/admin/export/conversions", {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
+      const res = await api.get(
+        "/admin/export/conversions",
+        {
+          responseType: "blob", // ✅ THIS IS THE KEY
+        }
+      );
+
+      const blob = new Blob([res.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
 
-      if (!res.ok) {
-        throw new Error("Export failed");
-      }
-
-      const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
 
       const a = document.createElement("a");
       a.href = url;
       a.download = `converted_orders_${Date.now()}.xlsx`;
+      document.body.appendChild(a);
       a.click();
 
+      a.remove();
       window.URL.revokeObjectURL(url);
+
       toast.success("Export completed");
     } catch (err) {
+      console.error(err);
       toast.error("Failed to export converted data");
     } finally {
       setExporting(false);
@@ -218,6 +222,7 @@ const activityColumns = [
   <FileText className="w-4 h-4" />
   {exporting ? "Exporting..." : "Export Converted Data"}
 </Button>
+
 
       {/* Alerts */}
       <Card>
