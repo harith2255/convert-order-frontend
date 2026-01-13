@@ -46,9 +46,20 @@ async function uploadAndParse(
 
   onProgress(80);
 
-  if (!res.data || !res.data.extractedFields) {
-    throw new Error("Parsing failed");
-  }
+const result = res.data;
+
+if (!result) {
+  throw new Error("Empty server response");
+}
+
+if (result.error) {
+  throw new Error(result.error);
+}
+
+if (!Array.isArray(result.dataRows) || result.dataRows.length === 0) {
+  throw new Error("No rows could be extracted from the file");
+}
+
 
   onProgress(100);
 
@@ -127,10 +138,16 @@ const handleContinue = async () => {
         fileName: file.name,
       },
     });
-  } catch (err) {
-    alert("Failed to upload and parse file.");
-    console.error(err);
-  } finally {
+  } catch (err: any) {
+  const message =
+    err?.response?.data?.message ||
+    err?.message ||
+    "Failed to upload and parse file.";
+
+  alert(message);
+  console.error("Upload/parse failed:", err);
+}
+ finally {
     setIsUploading(false);
   }
 };

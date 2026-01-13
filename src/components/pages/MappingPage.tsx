@@ -17,7 +17,6 @@ import { Dropdown } from "../Dropdown";
 import { Badge } from "../Badge";
 import { toast } from "sonner";
 import api from "../../services/api";
-import { normalizeKey } from "../../utils/normalizeKey";
 import { useNavigate, useLocation } from "react-router-dom";
 
 interface ExtractedField {
@@ -53,6 +52,11 @@ export function MappingPage() {
   >([]);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [lockedFields, setLockedFields] = useState<Set<string>>(new Set());
+
+  const [rows, setRows] = useState<any[]>([]);
+const [rowErrors, setRowErrors] = useState<Record<number, string[]>>({});
+const [showPreview, setShowPreview] = useState(true);
+
   
   const parsedResult = location.state?.parsedResult;
 
@@ -104,12 +108,30 @@ export function MappingPage() {
       return;
     }
 
-    setUploadId(parsedResult.uploadId);
+ if (Array.isArray(parsedResult.dataRows)) {
+  const previewRows = parsedResult.dataRows.slice(0, 50);
+  setRows(previewRows);
+
+  // ✅ validate all rows once
+  previewRows.forEach((row, index) => {
+    validateRowWithData(index, row);
+  });
+}
+   if (!parsedResult.uploadId) {
+  toast.error("Upload session missing. Please re-upload file.");
+  navigate("/upload");
+  return;
+}
+setUploadId(parsedResult.uploadId);
+
 
     // Filter out ignored fields
     const filtered = (parsedResult.extractedFields || []).filter((f: ExtractedField) => {
       const fieldLower = f.fieldName.toLowerCase();
-      return !IGNORE_FIELDS.some(ignored => fieldLower.includes(ignored));
+     return !IGNORE_FIELDS.some(
+  ignored => fieldLower === ignored || fieldLower.startsWith(ignored + " ")
+);
+
     });
 
     setExtractedFields(filtered);
@@ -123,10 +145,12 @@ export function MappingPage() {
       initial[f.id] = f.autoMapped || "";
       
       // Lock high-confidence mappings
-      if (f.confidence === "high" && f.autoMapped) {
-        locked.add(f.id);
-      }
+     if (f.confidence === "high" && f.autoMapped && REQUIRED_COLUMNS.includes(f.autoMapped)) {
+  locked.add(f.id);
+}
+
     });
+    
 
     setMappings(initial);
     setLockedFields(locked);
@@ -134,7 +158,36 @@ export function MappingPage() {
   }, [parsedResult, navigate]);
 
   /* ---------------- HELPER FUNCTIONS ---------------- */
-  const isMetaField = (fieldId: string) => fieldId.startsWith("__meta_");
+
+
+const updateCell = (rowIndex: number, column: string, value: string) => {
+  setRows(prev => {
+    const next = [...prev];
+    const updatedRow = { ...next[rowIndex], [column]: value };
+    next[rowIndex] = updatedRow;
+
+    validateRowWithData(rowIndex, updatedRow); // ✅ validate immediately
+    return next;
+  });
+};
+
+const validateRowWithData = (rowIndex: number, row: any) => {
+  const errors: string[] = [];
+
+  if (!row.ITEMDESC || row.ITEMDESC.trim().length < 3) {
+    errors.push("Invalid ITEMDESC");
+  }
+
+  if (!row.ORDERQTY || isNaN(Number(row.ORDERQTY)) || Number(row.ORDERQTY) <= 0) {
+    errors.push("Invalid ORDERQTY");
+  }
+
+  setRowErrors(prev => ({
+    ...prev,
+    [rowIndex]: errors
+  }));
+};
+
 
   const toggleLock = (fieldId: string) => {
     setLockedFields((prev) => {
@@ -191,9 +244,29 @@ export function MappingPage() {
 
     return errors;
   };
+const deleteRow = (rowIndex: number) => {
+  setRows(prev => prev.filter((_, i) => i !== rowIndex));
+
+  setRowErrors(prev => {
+    const next: Record<number, string[]> = {};
+    Object.entries(prev).forEach(([key, value]) => {
+      const idx = Number(key);
+      if (idx < rowIndex) next[idx] = value;
+      if (idx > rowIndex) next[idx - 1] = value;
+    });
+    return next;
+  });
+};
 
   /* ---------------- CONVERT ---------------- */
   const handleConvert = async () => {
+
+    const invalidRows = Object.values(rowErrors).some(e => e.length > 0);
+if (invalidRows) {
+  toast.error("Fix row errors before converting");
+  return;
+}
+
     if (!uploadId) {
       toast.error("Invalid upload session. Please re-upload the file.");
       navigate("/upload");
@@ -248,6 +321,8 @@ export function MappingPage() {
 
       const res = await api.post("/orders/convert", {
         uploadId,
+         mappings: cleanMappings,
+          editedRows: rows, 
        
       });
 
@@ -300,6 +375,9 @@ export function MappingPage() {
   const requiredMapped = REQUIRED_COLUMNS.filter(req => 
     Object.values(mappings).some(v => v.toUpperCase() === req)
   ).length;
+const isMetaField = (fieldId: string) => {
+  return fieldId.startsWith("__meta_");
+};
 
   /* ---------------- RENDER ---------------- */
   return (
@@ -495,6 +573,85 @@ export function MappingPage() {
           </div>
         </div>
       </Card>
+      <Card>
+  <div className="flex items-center justify-between mb-4">
+    <h2 className="text-lg font-semibold text-neutral-900">
+      Row Preview (Editable)
+    </h2>
+    <Button
+      variant="secondary"
+      onClick={() => setShowPreview(v => !v)}
+    >
+      {showPreview ? "Hide Preview" : "Show Preview"}
+    </Button>
+  </div>
+
+  {showPreview && (
+    <div className="overflow-auto border rounded-lg">
+      <table className="min-w-full text-sm">
+        <thead className="bg-neutral-100">
+          <tr>
+            {["SAPCODE", "ITEMDESC", "ORDERQTY", "DVN"].map(col => (
+              <th
+                key={col}
+                className="px-3 py-2 text-left font-medium text-neutral-700"
+              >
+                {col}
+              </th>
+            ))}
+           <th className="px-3 py-2 text-center">Actions</th>
+
+          </tr>
+        </thead>
+
+        <tbody>
+          {rows.map((row, rowIndex) => {
+            const errors = rowErrors[rowIndex] || [];
+            const hasError = errors.length > 0;
+
+            return (
+              <tr
+                key={rowIndex}
+                className={hasError ? "bg-red-50" : "hover:bg-neutral-50"}
+              >
+                {["SAPCODE", "ITEMDESC", "ORDERQTY", "DVN"].map(col => (
+                  <td key={col} className="px-3 py-1">
+                    <input
+                      value={row[col] ?? ""}
+                      onChange={(e) =>
+                        updateCell(rowIndex, col, e.target.value)
+                      }
+                      className={`w-full px-2 py-1 border rounded ${
+                        hasError ? "border-red-400" : "border-neutral-300"
+                      }`}
+                    />
+                  </td>
+                ))}
+
+             <td className="px-3 py-1 flex items-center justify-center gap-2">
+  {hasError ? (
+    <Badge variant="warning">Invalid</Badge>
+  ) : (
+    <Badge variant="success">OK</Badge>
+  )}
+
+  <button
+    onClick={() => deleteRow(rowIndex)}
+    className="text-red-600 hover:text-red-800"
+    title="Delete row"
+  >
+    🗑️
+  </button>
+</td>
+
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  )}
+</Card>
     </div>
   );
 }
