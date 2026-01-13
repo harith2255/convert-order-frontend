@@ -1,6 +1,6 @@
 /**
- * PRODUCTION CONTROLLER - PHARMA ORDER PROCESSING
- * Fixed: MongoDB conflict, PDF extraction, admin export
+ * PRODUCTION CONTROLLER V3 - Enhanced BOX PACK & PACK Handling
+ * Accurate calculations matching pharmaceutical template requirements
  */
 
 import OrderUpload from "../models/orderUpload.js";
@@ -9,7 +9,6 @@ import crypto from "crypto";
 import path from "path";
 import fs from "fs";
 import MasterOrder from "../models/masterOrder.js";
-import { normalizeKey } from "../utils/normalizeKey.js";
 import { unifiedExtract } from "../services/unifiedParser.js";
 
 const TEMPLATE_COLUMNS = [
@@ -24,7 +23,134 @@ const TEMPLATE_COLUMNS = [
 ];
 
 /* ========================================================================
-   EXTRACT ENDPOINT - Enhanced Error Handling
+   HELPER FUNCTIONS
+======================================================================== */
+
+/**
+ * Extract pack size from item description if not already provided
+ */
+function extractPackFromDescription(itemDesc) {
+  if (!itemDesc) return 0;
+
+  const patterns = [
+    /\((\d+)['"`\s]*s\)/gi,       // (30'S)
+    /\b(\d+)['"`\s]*s\b/gi,       // 15's
+    /\b(\d+)\s*tabs?\b/gi,        // 25 TABS
+    /\b(\d+)\s*tablets?\b/gi,     // 10 TABLETS
+    /\b(\d+)\s*caps?\b/gi,        // 10 CAPS
+    /\b(\d+)\s*capsules?\b/gi,    // 10 CAPSULES
+    /\/(\d+)\b/g,                 // 5/25 (second number)
+  ];
+
+  const matches = [];
+  
+  for (const pattern of patterns) {
+    let match;
+    const regex = new RegExp(pattern.source, pattern.flags);
+    
+    while ((match = regex.exec(itemDesc)) !== null) {
+      const num = parseInt(match[1], 10);
+      if (num > 0 && num <= 1000) {
+        matches.push(num);
+      }
+    }
+  }
+
+  if (matches.length === 0) return 0;
+
+  // Return most common value
+  const counts = {};
+  matches.forEach(m => counts[m] = (counts[m] || 0) + 1);
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  
+  return parseInt(sorted[0][0], 10);
+}
+
+/**
+ * Calculate BOX PACK from ORDERQTY and PACK
+ */
+function calculateBoxPack(orderQty, pack) {
+  if (!orderQty || !pack || pack === 0) return 0;
+  return Math.floor(orderQty / pack);
+}
+
+/**
+ * Validate and enrich a single row
+ */
+function validateAndEnrichRow(row, rowIndex) {
+  const errors = [];
+  const warnings = [];
+
+  // 1. Validate ITEMDESC (required)
+  if (!row["ITEMDESC"] || row["ITEMDESC"].length < 2) {
+    errors.push({
+      rowNumber: rowIndex + 2,
+      field: "ITEMDESC",
+      error: "Missing or invalid item description"
+    });
+    return { row, errors, warnings };
+  }
+
+  // 2. Validate ORDERQTY (required)
+  const orderQty = Number(row["ORDERQTY"]);
+  if (!orderQty || orderQty <= 0 || orderQty > 10000) {
+    errors.push({
+      rowNumber: rowIndex + 2,
+      field: "ORDERQTY",
+      error: "Invalid quantity (must be 1-10000)"
+    });
+    return { row, errors, warnings };
+  }
+
+  // 3. Extract PACK if missing
+  let pack = Number(row["PACK"]) || 0;
+  if (pack === 0) {
+    pack = extractPackFromDescription(row["ITEMDESC"]);
+    if (pack > 0) {
+      row["PACK"] = pack;
+      warnings.push({
+        rowNumber: rowIndex + 2,
+        field: "PACK",
+        warning: `Auto-extracted pack size: ${pack}`,
+        newValue: pack
+      });
+    }
+  }
+
+  // 4. Calculate BOX PACK if missing or zero
+  let boxPack = Number(row["BOX PACK"]) || 0;
+  if (boxPack === 0 && pack > 0 && orderQty > 0) {
+    boxPack = calculateBoxPack(orderQty, pack);
+    if (boxPack > 0) {
+      row["BOX PACK"] = boxPack;
+      warnings.push({
+        rowNumber: rowIndex + 2,
+        field: "BOX PACK",
+        warning: `Auto-calculated: ${boxPack} (${orderQty} ÷ ${pack})`,
+        newValue: boxPack
+      });
+    }
+  }
+
+  // 5. Validate BOX PACK calculation
+  if (pack > 0 && orderQty > 0) {
+    const expectedBox = calculateBoxPack(orderQty, pack);
+    if (boxPack !== expectedBox && expectedBox > 0) {
+      warnings.push({
+        rowNumber: rowIndex + 2,
+        field: "BOX PACK",
+        warning: `BOX PACK mismatch: Expected ${expectedBox}, got ${boxPack}. Auto-correcting.`,
+        newValue: expectedBox
+      });
+      row["BOX PACK"] = expectedBox;
+    }
+  }
+
+  return { row, errors, warnings };
+}
+
+/* ========================================================================
+   EXTRACT ENDPOINT
 ======================================================================== */
 
 export const extractOrderFields = async (req, res, next) => {
@@ -49,7 +175,7 @@ export const extractOrderFields = async (req, res, next) => {
       .update(file.buffer)
       .digest("hex");
 
-    // Extract using unified parser with better error context
+    // Extract using unified parser
     let extractionResult;
     try {
       extractionResult = await unifiedExtract(file);
@@ -58,9 +184,8 @@ export const extractOrderFields = async (req, res, next) => {
       return res.status(422).json({
         success: false,
         code: "PARSER_ERROR",
-        message: "Failed to parse file. Please ensure it's a valid Excel/PDF/Text file with a clear table structure.",
-        extractedFields: [],
-        hint: "The file should contain columns like: Item/Product Name, Quantity, SAP Code, etc."
+        message: "Failed to parse file. Please ensure it's a valid Excel/PDF/Text file.",
+        extractedFields: []
       });
     }
 
@@ -68,38 +193,36 @@ export const extractOrderFields = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         code: "UNSUPPORTED_FORMAT",
-        message: "Unsupported file format. Please upload Excel (.xlsx, .xls), PDF, or Text files.",
+        message: "Unsupported file format.",
         extractedFields: []
       });
     }
 
     if (extractionResult.error) {
       const errorMessages = {
-        "TABLE_HEADER_NOT_FOUND": "Could not find a valid table header in the file. Please ensure your file has column headers like 'Item Name', 'Quantity', 'Product', etc.",
-        "NO_DATA_ROWS": "No data rows found in the file. The file appears to be empty.",
-        "EMPTY_FILE": "The uploaded file is empty or corrupted.",
-        "PDF_EXTRACTION_FAILED": "Failed to extract text from PDF. The PDF might be scanned or image-based.",
-        "EXCEL_EXTRACTION_FAILED": "Failed to read Excel file. The file might be corrupted.",
-        "TXT_EXTRACTION_FAILED": "Failed to read text file. The file might be corrupted or in an unsupported encoding."
+        "TABLE_HEADER_NOT_FOUND": "Could not find table headers in the file.",
+        "NO_DATA_ROWS": "No data rows found.",
+        "EMPTY_FILE": "The file is empty or corrupted.",
+        "PDF_EXTRACTION_FAILED": "Failed to extract text from PDF.",
+        "EXCEL_EXTRACTION_FAILED": "Failed to read Excel file.",
+        "TXT_EXTRACTION_FAILED": "Failed to read text file."
       };
 
       return res.status(422).json({
         success: false,
         code: extractionResult.error,
         message: errorMessages[extractionResult.error] || "Extraction failed",
-        extractedFields: [],
-        hint: "Try: 1) Ensure the file has clear column headers, 2) Check if data is in a table format, 3) For PDFs, ensure text is selectable (not scanned images)"
+        extractedFields: []
       });
     }
 
-    if (!Array.isArray(extractionResult.dataRows) || 
+    if (!Array.isArray(extractionResult.dataRows) ||
         extractionResult.dataRows.length === 0) {
       return res.status(422).json({
         success: false,
-        code: "EMPTY_EXTRACTION",
-        message: "No valid data extracted from file. Please check your file format and data structure.",
-        extractedFields: [],
-        hint: "Make sure your file contains: 1) A clear header row, 2) At least one data row, 3) Item descriptions and quantities"
+        code: "NO_EXTRACTABLE_FIELDS",
+        message: "No data rows could be extracted.",
+        extractedFields: []
       });
     }
 
@@ -120,7 +243,6 @@ export const extractOrderFields = async (req, res, next) => {
         extractedData: extractionResult
       });
     } else {
-      // Same file - overwrite
       upload.status = "EXTRACTED";
       upload.extractedData = extractionResult;
       upload.recordsProcessed = 0;
@@ -137,7 +259,9 @@ export const extractOrderFields = async (req, res, next) => {
     res.json({
       success: true,
       uploadId: upload._id,
-      extractedFields: extractionResult.extractedFields
+      extractedFields: extractionResult.extractedFields,
+      dataRows: extractionResult.dataRows,
+      rowCount: extractionResult.dataRows.length
     });
 
   } catch (err) {
@@ -147,15 +271,14 @@ export const extractOrderFields = async (req, res, next) => {
 };
 
 /* ========================================================================
-   CONVERT ENDPOINT - Fixed MongoDB Conflict Error
+   CONVERT ENDPOINT
 ======================================================================== */
 
 export const convertOrders = async (req, res, next) => {
+  const { uploadId, editedRows } = req.body;
   const startTime = Date.now();
 
   try {
-    const { uploadId } = req.body;
-
     if (!uploadId) {
       return res.status(400).json({
         success: false,
@@ -175,12 +298,14 @@ export const convertOrders = async (req, res, next) => {
       });
     }
 
-    // Allow re-conversion
     if (upload.status === "CONVERTED") {
       upload.status = "EXTRACTED";
     }
 
-    const { dataRows, meta } = upload.extractedData;
+    const { meta } = upload.extractedData;
+    const dataRows = Array.isArray(editedRows) && editedRows.length > 0
+      ? editedRows
+      : upload.extractedData.dataRows;
 
     console.log("🔄 Conversion started:", {
       uploadId,
@@ -191,51 +316,29 @@ export const convertOrders = async (req, res, next) => {
     const rowErrors = [];
     const rowWarnings = [];
 
-    // Process each row - data is already in template format
+    // Process each row
     dataRows.forEach((row, rowIndex) => {
-      // Validate required fields
-      if (!row["ITEMDESC"] || row["ITEMDESC"].length < 2) {
-        rowErrors.push({
-          rowNumber: rowIndex + 2,
-          field: "ITEMDESC",
-          error: "Missing or invalid item description"
-        });
+      const { row: enrichedRow, errors, warnings } = validateAndEnrichRow(row, rowIndex);
+
+      if (errors.length > 0) {
+        rowErrors.push(...errors);
         return;
       }
 
-      if (!row["ORDERQTY"] || row["ORDERQTY"] <= 0 || row["ORDERQTY"] > 10000) {
-        rowErrors.push({
-          rowNumber: rowIndex + 2,
-          field: "ORDERQTY",
-          error: "Invalid quantity (must be 1-10000)"
-        });
-        return;
+      if (warnings.length > 0) {
+        rowWarnings.push(...warnings);
       }
 
-      // Auto-calculate BOX PACK if possible
-      if (!row["BOX PACK"] && row["PACK"] && row["ORDERQTY"]) {
-        const calculated = Math.floor(row["ORDERQTY"] / row["PACK"]);
-        if (calculated > 0) {
-          row["BOX PACK"] = calculated;
-          rowWarnings.push({
-            rowNumber: rowIndex + 2,
-            field: "BOX PACK",
-            warning: `Auto-calculated as ${calculated}`,
-            newValue: calculated
-          });
-        }
-      }
-
-      // Add validated row
+      // Add to output
       outputRows.push({
-        "CODE": row["CODE"] || "",
-        "CUSTOMER NAME": row["CUSTOMER NAME"] || meta.customerName || "UNKNOWN CUSTOMER",
-        "SAPCODE": row["SAPCODE"] || "",
-        "ITEMDESC": row["ITEMDESC"],
-        "ORDERQTY": Number(row["ORDERQTY"]),
-        "BOX PACK": Number(row["BOX PACK"]) || 0,
-        "PACK": Number(row["PACK"]) || 0,
-        "DVN": row["DVN"] || ""
+        "CODE": enrichedRow["CODE"] || "",
+        "CUSTOMER NAME": enrichedRow["CUSTOMER NAME"] || meta.customerName || "UNKNOWN CUSTOMER",
+        "SAPCODE": enrichedRow["SAPCODE"] || "",
+        "ITEMDESC": enrichedRow["ITEMDESC"],
+        "ORDERQTY": Number(enrichedRow["ORDERQTY"]),
+        "BOX PACK": Number(enrichedRow["BOX PACK"]) || 0,
+        "PACK": Number(enrichedRow["PACK"]) || 0,
+        "DVN": enrichedRow["DVN"] || ""
       });
     });
 
@@ -257,7 +360,6 @@ export const convertOrders = async (req, res, next) => {
     // Create Excel workbook
     const workbook = XLSX.utils.book_new();
 
-    // Convert to array format for Excel
     const excelRows = outputRows.map(row => [
       row["CODE"],
       row["CUSTOMER NAME"],
@@ -274,7 +376,6 @@ export const convertOrders = async (req, res, next) => {
       ...excelRows
     ]);
 
-    // Apply professional styling
     styleSheet(sheet, excelRows.length);
 
     XLSX.utils.book_append_sheet(workbook, sheet, "Order Training");
@@ -302,9 +403,7 @@ export const convertOrders = async (req, res, next) => {
 
     console.log("✅ Conversion completed successfully");
 
-    // ===============================
-    // DEDUPLICATE WITHIN SAME UPLOAD
-    // ===============================
+    // Update master database
     const dedupedMap = new Map();
 
     for (const row of outputRows) {
@@ -313,7 +412,13 @@ export const convertOrders = async (req, res, next) => {
       if (!dedupedMap.has(key)) {
         dedupedMap.set(key, { ...row });
       } else {
-        dedupedMap.get(key).ORDERQTY += row["ORDERQTY"];
+        const existing = dedupedMap.get(key);
+        existing.ORDERQTY += row["ORDERQTY"];
+        
+        // Recalculate BOX PACK after summing quantities
+        if (existing.PACK > 0) {
+          existing["BOX PACK"] = calculateBoxPack(existing.ORDERQTY, existing.PACK);
+        }
       }
     }
 
@@ -321,9 +426,6 @@ export const convertOrders = async (req, res, next) => {
 
     console.log(`📝 Updating master database with ${dedupedRows.length} deduplicated rows...`);
 
-    // ===============================
-    // UPDATE MASTER DATABASE - FIXED CONFLICT ERROR
-    // ===============================
     let masterUpdates = 0;
     let masterErrors = 0;
 
@@ -331,38 +433,33 @@ export const convertOrders = async (req, res, next) => {
       const customerName = String(row["CUSTOMER NAME"] || "").trim();
       const itemdesc = String(row["ITEMDESC"] || "").trim();
 
-      if (!customerName || !itemdesc) {
-        console.warn("⚠️ Skipping row with empty customer name or item description");
-        continue;
-      }
+      if (!customerName || !itemdesc) continue;
 
       try {
-        // ✅ FIX: Use findOneAndUpdate with separate logic for new vs existing
         const existing = await MasterOrder.findOne({ customerName, itemdesc });
 
         if (existing) {
-          // Update existing record
+          const newQty = existing.orderqty + row["ORDERQTY"];
+          const newBoxPack = row["PACK"] > 0 ? calculateBoxPack(newQty, row["PACK"]) : existing.boxPack;
+
           await MasterOrder.updateOne(
             { _id: existing._id },
             {
-              $inc: {
-                orderqty: row["ORDERQTY"],
-                uploadCount: 1,
-              },
-              $addToSet: {
-                sourceUploads: upload._id,
-              },
+              $inc: { uploadCount: 1 },
+              $addToSet: { sourceUploads: upload._id },
               $set: {
+                orderqty: newQty,
+                boxPack: newBoxPack,
+                pack: row["PACK"] || existing.pack,
                 lastUploadId: upload._id,
-                lastUpdatedAt: new Date(),
-              },
+                lastUpdatedAt: new Date()
+              }
             }
           );
         } else {
-          // Create new record
           await MasterOrder.create({
-            customerName: customerName,
-            itemdesc: itemdesc,
+            customerName,
+            itemdesc,
             code: row["CODE"] || "",
             sapcode: row["SAPCODE"] || "",
             dvn: row["DVN"] || "",
@@ -372,36 +469,24 @@ export const convertOrders = async (req, res, next) => {
             uploadCount: 1,
             sourceUploads: [upload._id],
             lastUploadId: upload._id,
-            lastUpdatedAt: new Date(),
+            lastUpdatedAt: new Date()
           });
         }
 
         masterUpdates++;
 
-        if (masterUpdates % 50 === 0) {
-          console.log(`📝 Updated ${masterUpdates}/${dedupedRows.length} master records...`);
-        }
-
       } catch (dbError) {
         masterErrors++;
-        console.error("❌ Master update error:", {
-          customerName,
-          itemdesc,
-          error: dbError.message,
-          code: dbError.code
-        });
+        console.error("❌ Master update error:", dbError.message);
 
-        // Handle duplicate key errors gracefully
         if (dbError.code === 11000) {
-          console.warn(`⚠️ Duplicate detected for: ${itemdesc}`);
           try {
-            // Retry with just increment
             await MasterOrder.updateOne(
               { customerName, itemdesc },
               {
                 $inc: { orderqty: row["ORDERQTY"], uploadCount: 1 },
                 $addToSet: { sourceUploads: upload._id },
-                $set: { lastUploadId: upload._id, lastUpdatedAt: new Date() },
+                $set: { lastUploadId: upload._id, lastUpdatedAt: new Date() }
               }
             );
             masterUpdates++;
@@ -435,8 +520,14 @@ export const convertOrders = async (req, res, next) => {
 
 function styleSheet(sheet, dataRowCount) {
   sheet["!cols"] = [
-    { wch: 10 }, { wch: 30 }, { wch: 12 }, { wch: 50 },
-    { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 15 }
+    { wch: 10 },  // CODE
+    { wch: 30 },  // CUSTOMER NAME
+    { wch: 12 },  // SAPCODE
+    { wch: 50 },  // ITEMDESC
+    { wch: 12 },  // ORDERQTY
+    { wch: 10 },  // BOX PACK
+    { wch: 10 },  // PACK
+    { wch: 15 }   // DVN
   ];
 
   const range = XLSX.utils.decode_range(sheet["!ref"]);
@@ -488,7 +579,7 @@ function styleSheet(sheet, dataRowCount) {
 }
 
 /* ========================================================================
-   OTHER ENDPOINTS
+   OTHER ENDPOINTS (unchanged)
 ======================================================================== */
 
 export const getOrderHistory = async (req, res) => {
@@ -535,26 +626,26 @@ export const downloadConvertedFile = async (req, res, next) => {
   try {
     const upload = await OrderUpload.findOne({
       _id: req.params.id,
-      userId: req.user.id,
+      userId: req.user.id
     });
 
     if (!upload) {
       return res.status(404).json({
         success: false,
-        message: "Order not found or unauthorized",
+        message: "Order not found"
       });
     }
 
     if (upload.status !== "CONVERTED") {
       return res.status(400).json({
         success: false,
-        message: `File is not ready for download. Current status: ${upload.status}`,
+        message: `File not ready. Status: ${upload.status}`
       });
     }
 
     if (upload.outputFile) {
       const filePath = path.join("uploads", upload.outputFile);
-      
+
       if (fs.existsSync(filePath)) {
         res.setHeader(
           "Content-Type",
@@ -564,7 +655,7 @@ export const downloadConvertedFile = async (req, res, next) => {
           "Content-Disposition",
           `attachment; filename="${upload.fileName.replace(/\.[^/.]+$/, "")}-converted.xlsx"`
         );
-        
+
         return res.sendFile(path.resolve(filePath));
       }
     }
@@ -573,7 +664,7 @@ export const downloadConvertedFile = async (req, res, next) => {
     if (!upload.convertedData || !upload.convertedData.rows) {
       return res.status(404).json({
         success: false,
-        message: "No converted data available",
+        message: "No converted data available"
       });
     }
 
@@ -581,15 +672,12 @@ export const downloadConvertedFile = async (req, res, next) => {
     const headers = upload.convertedData.headers || TEMPLATE_COLUMNS;
     const rows = upload.convertedData.rows;
 
-    const excelRows = rows.map(row => 
+    const excelRows = rows.map(row =>
       headers.map(header => row[header] || "")
     );
 
     const sheet = XLSX.utils.aoa_to_sheet([headers, ...excelRows]);
-    sheet["!cols"] = [
-      { wch: 10 }, { wch: 30 }, { wch: 12 }, { wch: 50 },
-      { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 15 }
-    ];
+    styleSheet(sheet, excelRows.length);
 
     XLSX.utils.book_append_sheet(workbook, sheet, "Order Training");
 
@@ -654,7 +742,7 @@ export const getOrderTemplate = async (_req, res) => {
     console.error("Template load error:", err);
     res.status(500).json({
       success: false,
-      message: "Failed to load training template"
+      message: "Failed to load template"
     });
   }
 };
@@ -669,9 +757,9 @@ export const getOrderById = async (req, res) => {
     }).lean();
 
     if (!order) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Order not found" 
+        message: "Order not found"
       });
     }
 
