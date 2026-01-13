@@ -270,7 +270,7 @@ export function ResultPage() {
             <Badge variant="warning">{warningRows.length}</Badge>
           </div>
           <p className="text-sm text-neutral-600 mb-4">
-            These records were processed but required automatic correction:
+            These records were processed but required automatic corrections:
           </p>
           <div className="overflow-x-auto">
             <Table columns={warningColumns} data={warningRows} />
