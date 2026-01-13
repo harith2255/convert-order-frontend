@@ -1,5 +1,5 @@
 import express from "express";
-import { exportAllConvertedData } from "../../controllers/admin/adminConversion.js";
+import { exportAllConvertedData } from "../../controllers/orderController.js";
 import { protect } from "../../middlewares/authMiddleware.js";
 
 const router = express.Router();

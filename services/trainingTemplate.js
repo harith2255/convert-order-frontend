@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 const TEMPLATE_PATH = path.join(
   __dirname,
-  "../templates",
+  "../src/templates",
   "Order Training.xlsx"
 );
 

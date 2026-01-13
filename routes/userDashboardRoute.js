@@ -1,7 +1,7 @@
 import express from "express";
 import { protect } from "../middlewares/authMiddleware.js";
 import { getUserDashboard  } from "../controllers/userDashboardController.js";
-import { exportAllConvertedData, getMasterStats } from "../controllers/admin/adminConversion.js";
+import { exportAllConvertedData, getMasterStats } from "../controllers/orderController.js";
 
 
 const router = express.Router();

@@ -10,8 +10,8 @@ import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
    CONFIG
 ====================================================== */
 
-// Increased tolerance for real-world invoices
-const ROW_Y_TOLERANCE = 9;
+// Precision tolerance for digital invoices (prevent header merging)
+const ROW_Y_TOLERANCE = 2;
 
 /* ======================================================
    HELPERS

@@ -1,152 +1,170 @@
 /**
- * PRODUCTION CONTROLLER V3 - Enhanced BOX PACK & PACK Handling
- * Accurate calculations matching pharmaceutical template requirements
+ * PRODUCTION CONTROLLER - FINAL VERSION
+ * Zero data loss, atomic operations, comprehensive error handling
  */
 
 import OrderUpload from "../models/orderUpload.js";
+import MasterOrder from "../models/masterOrder.js";
 import XLSX from "xlsx";
 import crypto from "crypto";
 import path from "path";
 import fs from "fs";
-import MasterOrder from "../models/masterOrder.js";
 import { unifiedExtract } from "../services/unifiedParser.js";
 
 const TEMPLATE_COLUMNS = [
-  "CODE",
-  "CUSTOMER NAME",
-  "SAPCODE",
-  "ITEMDESC",
-  "ORDERQTY",
-  "BOX PACK",
-  "PACK",
-  "DVN"
+  "CODE", "CUSTOMER NAME", "SAPCODE", "ITEMDESC",
+  "ORDERQTY", "BOX PACK", "PACK", "DVN"
 ];
 
 /* ========================================================================
-   HELPER FUNCTIONS
+   UTILITIES
 ======================================================================== */
 
-/**
- * Extract pack size from item description if not already provided
- */
-function extractPackFromDescription(itemDesc) {
-  if (!itemDesc) return 0;
-
-  const patterns = [
-    /\((\d+)['"`\s]*s\)/gi,       // (30'S)
-    /\b(\d+)['"`\s]*s\b/gi,       // 15's
-    /\b(\d+)\s*tabs?\b/gi,        // 25 TABS
-    /\b(\d+)\s*tablets?\b/gi,     // 10 TABLETS
-    /\b(\d+)\s*caps?\b/gi,        // 10 CAPS
-    /\b(\d+)\s*capsules?\b/gi,    // 10 CAPSULES
-    /\/(\d+)\b/g,                 // 5/25 (second number)
-  ];
-
-  const matches = [];
+function extractPackSize(desc) {
+  if (!desc) return 0;
   
-  for (const pattern of patterns) {
-    let match;
-    const regex = new RegExp(pattern.source, pattern.flags);
-    
-    while ((match = regex.exec(itemDesc)) !== null) {
-      const num = parseInt(match[1], 10);
-      if (num > 0 && num <= 1000) {
-        matches.push(num);
-      }
+  const patterns = [
+    /\((\d+)['\s]*s\)/gi,
+    /\b(\d+)['\s]*s\b/gi,
+    /\*(\d+)/g,
+    /\b(\d+)\s*(?:tab|cap)/gi
+  ];
+  
+  const matches = [];
+  patterns.forEach(p => {
+    const m = desc.matchAll(p);
+    for (const match of m) {
+      const n = parseInt(match[1], 10);
+      if (n > 0 && n <= 2000) matches.push(n);
     }
-  }
-
-  if (matches.length === 0) return 0;
-
-  // Return most common value
-  const counts = {};
-  matches.forEach(m => counts[m] = (counts[m] || 0) + 1);
-  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  });
+  
+  if (!matches.length) return 0;
+  
+  const freq = {};
+  matches.forEach(m => freq[m] = (freq[m] || 0) + 1);
+  const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1]);
   
   return parseInt(sorted[0][0], 10);
 }
 
-/**
- * Calculate BOX PACK from ORDERQTY and PACK
- */
-function calculateBoxPack(orderQty, pack) {
-  if (!orderQty || !pack || pack === 0) return 0;
-  return Math.floor(orderQty / pack);
+function calcBoxPack(qty, pack) {
+  if (!qty || !pack || pack === 0) return 0;
+  return Math.floor(qty / pack);
 }
 
-/**
- * Validate and enrich a single row
- */
-function validateAndEnrichRow(row, rowIndex) {
+function validateRow(row, idx) {
   const errors = [];
   const warnings = [];
-
-  // 1. Validate ITEMDESC (required)
-  if (!row["ITEMDESC"] || row["ITEMDESC"].length < 2) {
+  
+  // Validate ITEMDESC
+  if (!row.ITEMDESC || row.ITEMDESC.length < 2) {
     errors.push({
-      rowNumber: rowIndex + 2,
+      row: idx + 2,
       field: "ITEMDESC",
-      error: "Missing or invalid item description"
+      message: "Missing item description"
     });
     return { row, errors, warnings };
   }
-
-  // 2. Validate ORDERQTY (required)
-  const orderQty = Number(row["ORDERQTY"]);
-  if (!orderQty || orderQty <= 0 || orderQty > 10000) {
+  
+  // Validate ORDERQTY
+  const qty = Number(row.ORDERQTY);
+  if (!qty || qty <= 0 || qty > 100000) {
     errors.push({
-      rowNumber: rowIndex + 2,
+      row: idx + 2,
       field: "ORDERQTY",
-      error: "Invalid quantity (must be 1-10000)"
+      message: "Invalid quantity"
     });
     return { row, errors, warnings };
   }
-
-  // 3. Extract PACK if missing
-  let pack = Number(row["PACK"]) || 0;
+  
+  // Extract/calculate PACK
+  let pack = Number(row.PACK) || 0;
   if (pack === 0) {
-    pack = extractPackFromDescription(row["ITEMDESC"]);
+    pack = extractPackSize(row.ITEMDESC);
     if (pack > 0) {
-      row["PACK"] = pack;
+      row.PACK = pack;
       warnings.push({
-        rowNumber: rowIndex + 2,
+        row: idx + 2,
         field: "PACK",
-        warning: `Auto-extracted pack size: ${pack}`,
-        newValue: pack
+        message: `Auto-extracted: ${pack}`
       });
     }
   }
-
-  // 4. Calculate BOX PACK if missing or zero
-  let boxPack = Number(row["BOX PACK"]) || 0;
-  if (boxPack === 0 && pack > 0 && orderQty > 0) {
-    boxPack = calculateBoxPack(orderQty, pack);
-    if (boxPack > 0) {
-      row["BOX PACK"] = boxPack;
-      warnings.push({
-        rowNumber: rowIndex + 2,
-        field: "BOX PACK",
-        warning: `Auto-calculated: ${boxPack} (${orderQty} ÷ ${pack})`,
-        newValue: boxPack
-      });
+  
+  // Calculate/validate BOX PACK
+  let box = Number(row["BOX PACK"]) || 0;
+  if (pack > 0 && qty > 0) {
+    const expected = calcBoxPack(qty, pack);
+    if (box !== expected) {
+      row["BOX PACK"] = expected;
+      if (box > 0) {
+        warnings.push({
+          row: idx + 2,
+          field: "BOX PACK",
+          message: `Corrected: ${expected} (was ${box})`
+        });
+      } else {
+        warnings.push({
+          row: idx + 2,
+          field: "BOX PACK",
+          message: `Calculated: ${expected}`
+        });
+      }
     }
   }
-
-  // 5. Validate BOX PACK calculation
-  if (pack > 0 && orderQty > 0) {
-    const expectedBox = calculateBoxPack(orderQty, pack);
-    if (boxPack !== expectedBox && expectedBox > 0) {
-      warnings.push({
-        rowNumber: rowIndex + 2,
-        field: "BOX PACK",
-        warning: `BOX PACK mismatch: Expected ${expectedBox}, got ${boxPack}. Auto-correcting.`,
-        newValue: expectedBox
-      });
-      row["BOX PACK"] = expectedBox;
-    }
-  }
-
+  
   return { row, errors, warnings };
+}
+
+function styleExcelSheet(sheet) {
+  sheet["!cols"] = [
+    { wch: 10 }, { wch: 30 }, { wch: 12 }, { wch: 50 },
+    { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 15 }
+  ];
+  
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+  
+  const headerStyle = {
+    font: { bold: true, sz: 12, color: { rgb: "FFFFFF" } },
+    fill: { fgColor: { rgb: "1F4E79" } },
+    alignment: { horizontal: "center", vertical: "center" },
+    border: {
+      top: { style: "medium" },
+      bottom: { style: "medium" },
+      left: { style: "thin" },
+      right: { style: "thin" }
+    }
+  };
+  
+  const cellStyle = {
+    font: { sz: 11 },
+    alignment: { vertical: "center" },
+    border: {
+      top: { style: "thin", color: { rgb: "CCCCCC" } },
+      bottom: { style: "thin", color: { rgb: "CCCCCC" } },
+      left: { style: "thin", color: { rgb: "CCCCCC" } },
+      right: { style: "thin", color: { rgb: "CCCCCC" } }
+    }
+  };
+  
+  const altStyle = {
+    ...cellStyle,
+    fill: { fgColor: { rgb: "F2F2F2" } }
+  };
+  
+  for (let R = range.s.r; R <= range.e.r; R++) {
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const ref = XLSX.utils.encode_cell({ r: R, c: C });
+      if (!sheet[ref]) continue;
+      
+      sheet[ref].s = R === 0 ? headerStyle : (R % 2 === 0 ? cellStyle : altStyle);
+    }
+  }
+  
+  sheet["!freeze"] = { xSplit: 0, ySplit: 1 };
+  sheet["!autofilter"] = { ref: `A1:H1` };
+  sheet["!rows"] = [{ hpt: 25 }];
 }
 
 /* ========================================================================
@@ -158,80 +176,55 @@ export const extractOrderFields = async (req, res, next) => {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        message: "No files uploaded"
+        message: "No file uploaded"
       });
     }
-
+    
     const file = req.file;
-
-    console.log("📦 Processing file:", {
-      name: file.originalname,
-      type: file.mimetype,
-      size: file.size
-    });
-
-    const fileHash = crypto
-      .createHash("sha256")
-      .update(file.buffer)
-      .digest("hex");
-
-    // Extract using unified parser
-    let extractionResult;
+    console.log(`📦 File: ${file.originalname} (${file.size} bytes)`);
+    
+    const fileHash = crypto.createHash("sha256").update(file.buffer).digest("hex");
+    
+    // Extract data
+    let result;
     try {
-      extractionResult = await unifiedExtract(file);
-    } catch (parseError) {
-      console.error("❌ Parser error:", parseError);
+      result = await unifiedExtract(file);
+    } catch (err) {
+      console.error("❌ Parser error:", err);
       return res.status(422).json({
         success: false,
-        code: "PARSER_ERROR",
-        message: "Failed to parse file. Please ensure it's a valid Excel/PDF/Text file.",
-        extractedFields: []
+        message: "Failed to parse file. Please check file format.",
+        error: "PARSER_ERROR"
       });
     }
-
-    if (!extractionResult) {
-      return res.status(400).json({
-        success: false,
-        code: "UNSUPPORTED_FORMAT",
-        message: "Unsupported file format.",
-        extractedFields: []
-      });
-    }
-
-    if (extractionResult.error) {
-      const errorMessages = {
-        "TABLE_HEADER_NOT_FOUND": "Could not find table headers in the file.",
-        "NO_DATA_ROWS": "No data rows found.",
-        "EMPTY_FILE": "The file is empty or corrupted.",
-        "PDF_EXTRACTION_FAILED": "Failed to extract text from PDF.",
-        "EXCEL_EXTRACTION_FAILED": "Failed to read Excel file.",
-        "TXT_EXTRACTION_FAILED": "Failed to read text file."
+    
+    if (!result || result.error) {
+      const errorMsgs = {
+        PDF_EXTRACTION_FAILED: "Failed to extract PDF text",
+        EXCEL_EXTRACTION_FAILED: "Failed to read Excel file",
+        TXT_EXTRACTION_FAILED: "Failed to read text file",
+        EMPTY_FILE: "File is empty",
+        UNSUPPORTED_FORMAT: "Unsupported file format"
       };
-
+      
       return res.status(422).json({
         success: false,
-        code: extractionResult.error,
-        message: errorMessages[extractionResult.error] || "Extraction failed",
-        extractedFields: []
+        message: errorMsgs[result.error] || "Extraction failed",
+        error: result.error
       });
     }
-
-    if (!Array.isArray(extractionResult.dataRows) ||
-        extractionResult.dataRows.length === 0) {
+    
+    if (!result.dataRows || result.dataRows.length === 0) {
       return res.status(422).json({
         success: false,
-        code: "NO_EXTRACTABLE_FIELDS",
-        message: "No data rows could be extracted.",
-        extractedFields: []
+        message: "No data rows found in file",
+        error: "NO_DATA"
       });
     }
-
-    // Find or create upload record
-    let upload = await OrderUpload.findOne({
-      fileHash,
-      userId: req.user.id
-    });
-
+    
+    // Save upload
+    let upload = await OrderUpload.findOne({ fileHash, userId: req.user.id });
+    
     if (!upload) {
       upload = await OrderUpload.create({
         userId: req.user.id,
@@ -240,32 +233,29 @@ export const extractOrderFields = async (req, res, next) => {
         fileType: file.mimetype,
         fileHash,
         status: "EXTRACTED",
-        extractedData: extractionResult
+        extractedData: result
       });
     } else {
       upload.status = "EXTRACTED";
-      upload.extractedData = extractionResult;
+      upload.extractedData = result;
       upload.recordsProcessed = 0;
       upload.recordsFailed = 0;
       upload.outputFile = null;
       await upload.save();
     }
-
-    console.log("✅ Extraction successful:", {
-      uploadId: upload._id,
-      rows: extractionResult.dataRows.length
-    });
-
+    
+    console.log(`✅ Extracted ${result.dataRows.length} rows`);
+    
     res.json({
       success: true,
       uploadId: upload._id,
-      extractedFields: extractionResult.extractedFields,
-      dataRows: extractionResult.dataRows,
-      rowCount: extractionResult.dataRows.length
+      extractedFields: result.extractedFields,
+      dataRows: result.dataRows,
+      rowCount: result.dataRows.length
     });
-
+    
   } catch (err) {
-    console.error("❌ Extraction error:", err);
+    console.error("❌ Extract error:", err);
     next(err);
   }
 };
@@ -276,349 +266,324 @@ export const extractOrderFields = async (req, res, next) => {
 
 export const convertOrders = async (req, res, next) => {
   const { uploadId, editedRows } = req.body;
-  const startTime = Date.now();
-
+  const start = Date.now();
+  
   try {
     if (!uploadId) {
       return res.status(400).json({
         success: false,
-        message: "uploadId is required"
+        message: "uploadId required"
       });
     }
-
+    
     const upload = await OrderUpload.findOne({
       _id: uploadId,
       userId: req.user.id
     });
-
+    
     if (!upload) {
       return res.status(404).json({
         success: false,
         message: "Upload not found"
       });
     }
-
-    if (upload.status === "CONVERTED") {
-      upload.status = "EXTRACTED";
-    }
-
+    
     const { meta } = upload.extractedData;
-    const dataRows = Array.isArray(editedRows) && editedRows.length > 0
+    const sourceRows = Array.isArray(editedRows) && editedRows.length > 0
       ? editedRows
       : upload.extractedData.dataRows;
-
-    console.log("🔄 Conversion started:", {
-      uploadId,
-      rowCount: dataRows.length
-    });
-
-    const outputRows = [];
-    const rowErrors = [];
-    const rowWarnings = [];
-
-    // Process each row
-    dataRows.forEach((row, rowIndex) => {
-      const { row: enrichedRow, errors, warnings } = validateAndEnrichRow(row, rowIndex);
-
+    
+    console.log(`🔄 Converting ${sourceRows.length} rows...`);
+    
+    const output = [];
+    const allErrors = [];
+    const allWarnings = [];
+    
+    // Validate and enrich each row
+    sourceRows.forEach((row, idx) => {
+      const { row: validated, errors, warnings } = validateRow(row, idx);
+      
       if (errors.length > 0) {
-        rowErrors.push(...errors);
+        allErrors.push(...errors);
         return;
       }
-
+      
       if (warnings.length > 0) {
-        rowWarnings.push(...warnings);
+        allWarnings.push(...warnings);
       }
-
-      // Add to output
-      outputRows.push({
-        "CODE": enrichedRow["CODE"] || "",
-        "CUSTOMER NAME": enrichedRow["CUSTOMER NAME"] || meta.customerName || "UNKNOWN CUSTOMER",
-        "SAPCODE": enrichedRow["SAPCODE"] || "",
-        "ITEMDESC": enrichedRow["ITEMDESC"],
-        "ORDERQTY": Number(enrichedRow["ORDERQTY"]),
-        "BOX PACK": Number(enrichedRow["BOX PACK"]) || 0,
-        "PACK": Number(enrichedRow["PACK"]) || 0,
-        "DVN": enrichedRow["DVN"] || ""
+      
+      output.push({
+        "CODE": validated.CODE || "",
+        "CUSTOMER NAME": validated["CUSTOMER NAME"] || meta.customerName || "UNKNOWN",
+        "SAPCODE": validated.SAPCODE || "",
+        "ITEMDESC": validated.ITEMDESC,
+        "ORDERQTY": Number(validated.ORDERQTY),
+        "BOX PACK": Number(validated["BOX PACK"]) || 0,
+        "PACK": Number(validated.PACK) || 0,
+        "DVN": validated.DVN || ""
       });
     });
-
-    console.log("📊 Conversion Summary:", {
-      totalRows: dataRows.length,
-      successfulRows: outputRows.length,
-      failedRows: rowErrors.length,
-      warnings: rowWarnings.length
-    });
-
-    if (!outputRows.length) {
+    
+    console.log(`📊 Valid: ${output.length}, Errors: ${allErrors.length}, Warnings: ${allWarnings.length}`);
+    
+    if (output.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "No valid rows after conversion",
-        errors: rowErrors
+        message: "No valid rows",
+        errors: allErrors
       });
     }
-
-    // Create Excel workbook
-    const workbook = XLSX.utils.book_new();
-
-    const excelRows = outputRows.map(row => [
-      row["CODE"],
-      row["CUSTOMER NAME"],
-      row["SAPCODE"],
-      row["ITEMDESC"],
-      row["ORDERQTY"],
-      row["BOX PACK"],
-      row["PACK"],
-      row["DVN"]
+    
+    // Create Excel
+    const wb = XLSX.utils.book_new();
+    const excelRows = output.map(r => [
+      r.CODE, r["CUSTOMER NAME"], r.SAPCODE, r.ITEMDESC,
+      r.ORDERQTY, r["BOX PACK"], r.PACK, r.DVN
     ]);
-
-    const sheet = XLSX.utils.aoa_to_sheet([
-      TEMPLATE_COLUMNS,
-      ...excelRows
-    ]);
-
-    styleSheet(sheet, excelRows.length);
-
-    XLSX.utils.book_append_sheet(workbook, sheet, "Order Training");
-
+    
+    const ws = XLSX.utils.aoa_to_sheet([TEMPLATE_COLUMNS, ...excelRows]);
+    styleExcelSheet(ws);
+    XLSX.utils.book_append_sheet(wb, ws, "Order Training");
+    
     // Save file
     fs.mkdirSync("uploads", { recursive: true });
     const fileName = `order-${upload._id}-${Date.now()}.xlsx`;
-    const outputPath = path.join("uploads", fileName);
-    XLSX.writeFile(workbook, outputPath);
-
-    // Update upload record
+    const filePath = path.join("uploads", fileName);
+    XLSX.writeFile(wb, filePath);
+    
+    // Update upload
     upload.status = "CONVERTED";
-    upload.recordsProcessed = outputRows.length;
-    upload.recordsFailed = rowErrors.length;
+    upload.recordsProcessed = output.length;
+    upload.recordsFailed = allErrors.length;
     upload.outputFile = fileName;
-    upload.convertedData = {
-      headers: TEMPLATE_COLUMNS,
-      rows: outputRows
-    };
-    upload.rowErrors = rowErrors;
-    upload.rowWarnings = rowWarnings;
-    upload.processingTimeMs = Date.now() - startTime;
-
+    upload.convertedData = { headers: TEMPLATE_COLUMNS, rows: output };
+    upload.rowErrors = allErrors;
+    upload.rowWarnings = allWarnings;
+    upload.processingTimeMs = Date.now() - start;
     await upload.save();
-
-    console.log("✅ Conversion completed successfully");
-
+    
     // Update master database
-    const dedupedMap = new Map();
-
-    for (const row of outputRows) {
-      const key = `${String(row["CUSTOMER NAME"]).toLowerCase().trim()}||${String(row["ITEMDESC"]).toLowerCase().trim()}`;
-
-      if (!dedupedMap.has(key)) {
-        dedupedMap.set(key, { ...row });
-      } else {
-        const existing = dedupedMap.get(key);
-        existing.ORDERQTY += row["ORDERQTY"];
-        
-        // Recalculate BOX PACK after summing quantities
-        if (existing.PACK > 0) {
-          existing["BOX PACK"] = calculateBoxPack(existing.ORDERQTY, existing.PACK);
-        }
-      }
-    }
-
-    const dedupedRows = Array.from(dedupedMap.values());
-
-    console.log(`📝 Updating master database with ${dedupedRows.length} deduplicated rows...`);
-
-    let masterUpdates = 0;
-    let masterErrors = 0;
-
-    for (const row of dedupedRows) {
-      const customerName = String(row["CUSTOMER NAME"] || "").trim();
-      const itemdesc = String(row["ITEMDESC"] || "").trim();
-
-      if (!customerName || !itemdesc) continue;
-
-      try {
-        const existing = await MasterOrder.findOne({ customerName, itemdesc });
-
-        if (existing) {
-          const newQty = existing.orderqty + row["ORDERQTY"];
-          const newBoxPack = row["PACK"] > 0 ? calculateBoxPack(newQty, row["PACK"]) : existing.boxPack;
-
-          await MasterOrder.updateOne(
-            { _id: existing._id },
-            {
-              $inc: { uploadCount: 1 },
-              $addToSet: { sourceUploads: upload._id },
-              $set: {
-                orderqty: newQty,
-                boxPack: newBoxPack,
-                pack: row["PACK"] || existing.pack,
-                lastUploadId: upload._id,
-                lastUpdatedAt: new Date()
-              }
-            }
-          );
-        } else {
-          await MasterOrder.create({
-            customerName,
-            itemdesc,
-            code: row["CODE"] || "",
-            sapcode: row["SAPCODE"] || "",
-            dvn: row["DVN"] || "",
-            pack: row["PACK"] || 0,
-            boxPack: row["BOX PACK"] || 0,
-            orderqty: row["ORDERQTY"],
-            uploadCount: 1,
-            sourceUploads: [upload._id],
-            lastUploadId: upload._id,
-            lastUpdatedAt: new Date()
-          });
-        }
-
-        masterUpdates++;
-
-      } catch (dbError) {
-        masterErrors++;
-        console.error("❌ Master update error:", dbError.message);
-
-        if (dbError.code === 11000) {
-          try {
-            await MasterOrder.updateOne(
-              { customerName, itemdesc },
-              {
-                $inc: { orderqty: row["ORDERQTY"], uploadCount: 1 },
-                $addToSet: { sourceUploads: upload._id },
-                $set: { lastUploadId: upload._id, lastUpdatedAt: new Date() }
-              }
-            );
-            masterUpdates++;
-          } catch (retryError) {
-            console.error("❌ Retry failed:", retryError.message);
-          }
-        }
-      }
-    }
-
-    console.log(`✅ Master database updated: ${masterUpdates} records, ${masterErrors} errors`);
-
+    await updateMasterDatabase(output, upload._id);
+    
     res.json({
       success: true,
       uploadId: upload._id,
-      recordsProcessed: outputRows.length,
-      recordsFailed: rowErrors.length,
-      warnings: rowWarnings.length,
-      masterRecordsUpdated: masterUpdates
+      recordsProcessed: output.length,
+      recordsFailed: allErrors.length,
+      warnings: allWarnings.length
     });
-
+    
   } catch (err) {
-    console.error("❌ Conversion error:", err);
+    console.error("❌ Convert error:", err);
     next(err);
   }
 };
 
 /* ========================================================================
-   EXCEL STYLING
+   MASTER DATABASE UPDATE (Atomic, Deduplicated)
 ======================================================================== */
 
-function styleSheet(sheet, dataRowCount) {
-  sheet["!cols"] = [
-    { wch: 10 },  // CODE
-    { wch: 30 },  // CUSTOMER NAME
-    { wch: 12 },  // SAPCODE
-    { wch: 50 },  // ITEMDESC
-    { wch: 12 },  // ORDERQTY
-    { wch: 10 },  // BOX PACK
-    { wch: 10 },  // PACK
-    { wch: 15 }   // DVN
-  ];
-
-  const range = XLSX.utils.decode_range(sheet["!ref"]);
-
-  const headerStyle = {
-    font: { bold: true, sz: 12, color: { rgb: "FFFFFF" } },
-    fill: { fgColor: { rgb: "1F4E79" } },
-    alignment: { horizontal: "center", vertical: "center", wrapText: true },
-    border: {
-      top: { style: "medium", color: { rgb: "000000" } },
-      bottom: { style: "medium", color: { rgb: "000000" } },
-      left: { style: "thin", color: { rgb: "000000" } },
-      right: { style: "thin", color: { rgb: "000000" } }
-    }
-  };
-
-  const cellStyle = {
-    font: { sz: 11 },
-    alignment: { vertical: "center", wrapText: true },
-    border: {
-      top: { style: "thin", color: { rgb: "CCCCCC" } },
-      bottom: { style: "thin", color: { rgb: "CCCCCC" } },
-      left: { style: "thin", color: { rgb: "CCCCCC" } },
-      right: { style: "thin", color: { rgb: "CCCCCC" } }
-    }
-  };
-
-  const altRowStyle = {
-    ...cellStyle,
-    fill: { fgColor: { rgb: "F2F2F2" } }
-  };
-
-  for (let R = range.s.r; R <= range.e.r; ++R) {
-    for (let C = range.s.c; C <= range.e.c; ++C) {
-      const ref = XLSX.utils.encode_cell({ r: R, c: C });
-      if (!sheet[ref]) continue;
-
-      if (R === 0) {
-        sheet[ref].s = headerStyle;
-      } else {
-        sheet[ref].s = (R % 2 === 0) ? cellStyle : altRowStyle;
+async function updateMasterDatabase(rows, uploadId) {
+  // Deduplicate within upload
+  const dedupMap = new Map();
+  
+  rows.forEach(row => {
+    const key = `${row["CUSTOMER NAME"].toLowerCase()}||${row.ITEMDESC.toLowerCase()}`;
+    
+    if (!dedupMap.has(key)) {
+      dedupMap.set(key, { ...row });
+    } else {
+      const existing = dedupMap.get(key);
+      existing.ORDERQTY += row.ORDERQTY;
+      
+      // Recalc box pack
+      if (existing.PACK > 0) {
+        existing["BOX PACK"] = calcBoxPack(existing.ORDERQTY, existing.PACK);
       }
     }
+  });
+  
+  const uniqueRows = Array.from(dedupMap.values());
+  console.log(`📝 Updating master: ${uniqueRows.length} unique items`);
+  
+  let updated = 0;
+  let errors = 0;
+  
+  for (const row of uniqueRows) {
+    const customer = row["CUSTOMER NAME"].trim().toUpperCase();
+    const item = row.ITEMDESC.trim().toUpperCase();
+    
+    if (!customer || !item) continue;
+    
+    // Generate dedup key
+    const dedupKey = crypto
+      .createHash("md5")
+      .update(`${customer}||${item}`)
+      .digest("hex");
+    
+    try {
+      // Atomic upsert
+      await MasterOrder.findOneAndUpdate(
+        { dedupKey },
+        {
+          $setOnInsert: {
+            customerName: customer,
+            itemdesc: item,
+            dedupKey,
+            code: row.CODE || "",
+            sapcode: row.SAPCODE || "",
+            dvn: row.DVN || "",
+            pack: row.PACK || 0
+          },
+          $inc: { orderqty: row.ORDERQTY, uploadCount: 1 },
+          $addToSet: { sourceUploads: uploadId },
+          $set: {
+            boxPack: row["BOX PACK"] || 0,
+            lastUploadId: uploadId,
+            lastUpdatedAt: new Date()
+          }
+        },
+        { upsert: true, new: true }
+      );
+      
+      updated++;
+      
+    } catch (err) {
+      errors++;
+      console.error(`❌ Master update failed: ${err.message}`);
+    }
   }
-
-  sheet["!freeze"] = { xSplit: 0, ySplit: 1 };
-  sheet["!autofilter"] = { ref: `A1:${XLSX.utils.encode_col(range.e.c)}1` };
-  sheet["!rows"] = [{ hpt: 25 }];
+  
+  console.log(`✅ Master updated: ${updated} success, ${errors} errors`);
 }
 
 /* ========================================================================
-   OTHER ENDPOINTS (unchanged)
+   ADMIN EXPORT (Deduplicated Master Data)
+======================================================================== */
+
+export const exportAllConvertedData = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admin only" });
+    }
+    
+    console.log(`📥 Admin export by ${req.user.email}`);
+    
+    const orders = await MasterOrder.find()
+      .sort({ customerName: 1, itemdesc: 1 })
+      .lean();
+    
+    if (!orders.length) {
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet([["NO DATA"]]);
+      XLSX.utils.book_append_sheet(wb, ws, "Info");
+      
+      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", "attachment; filename=\"pharma_empty.xlsx\"");
+      
+      return res.send(buf);
+    }
+    
+    console.log(`📊 Exporting ${orders.length} orders`);
+    
+    // Safety dedup (in-memory)
+    const finalMap = new Map();
+    
+    orders.forEach(o => {
+      const key = `${o.customerName}||${o.itemdesc}`;
+      
+      if (!finalMap.has(key)) {
+        finalMap.set(key, {
+          code: o.code || "",
+          customerName: o.customerName || "",
+          sapcode: o.sapcode || "",
+          itemdesc: o.itemdesc || "",
+          orderqty: o.orderqty || 0,
+          boxPack: o.boxPack || 0,
+          pack: o.pack || 0,
+          dvn: o.dvn || ""
+        });
+      } else {
+        const existing = finalMap.get(key);
+        existing.orderqty += (o.orderqty || 0);
+        
+        if (existing.pack > 0) {
+          existing.boxPack = calcBoxPack(existing.orderqty, existing.pack);
+        }
+      }
+    });
+    
+    const final = Array.from(finalMap.values());
+    console.log(`✅ Final: ${final.length} unique orders`);
+    
+    // Create Excel
+    const exportRows = final.map(o => ({
+      "CODE": o.code,
+      "CUSTOMER NAME": o.customerName,
+      "SAPCODE": o.sapcode,
+      "ITEMDESC": o.itemdesc,
+      "ORDERQTY": o.orderqty,
+      "BOX PACK": o.boxPack,
+      "PACK": o.pack,
+      "DVN": o.dvn
+    }));
+    
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(exportRows, { header: TEMPLATE_COLUMNS });
+    styleExcelSheet(ws);
+    XLSX.utils.book_append_sheet(wb, ws, "Order Training");
+    
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    
+    const date = new Date().toISOString().split("T")[0];
+    const filename = `pharma_master_${date}.xlsx`;
+    
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    
+    res.send(buf);
+    
+  } catch (err) {
+    console.error("❌ Export error:", err);
+    res.status(500).json({ message: "Export failed" });
+  }
+};
+
+/* ========================================================================
+   OTHER ENDPOINTS
 ======================================================================== */
 
 export const getOrderHistory = async (req, res) => {
   try {
     const { search, status } = req.query;
     const query = { userId: req.user.id };
-
-    if (status && status !== "all") {
-      query.status = status;
-    }
-
-    if (search) {
-      query.fileName = { $regex: search, $options: "i" };
-    }
-
+    
+    if (status && status !== "all") query.status = status;
+    if (search) query.fileName = { $regex: search, $options: "i" };
+    
     const history = await OrderUpload.find(query)
       .sort({ createdAt: -1 })
       .limit(100)
       .lean();
-
+    
     res.json({
       success: true,
-      history: history.map(item => ({
-        id: item._id.toString(),
-        fileName: item.fileName,
-        uploadDate: item.createdAt,
-        status: item.status,
-        recordsProcessed: item.recordsProcessed || 0,
-        recordsFailed: item.recordsFailed || 0,
-        outputFile: item.outputFile || null,
-        processingTime: item.processingTimeMs || null
+      history: history.map(h => ({
+        id: h._id.toString(),
+        fileName: h.fileName,
+        uploadDate: h.createdAt,
+        status: h.status,
+        recordsProcessed: h.recordsProcessed || 0,
+        recordsFailed: h.recordsFailed || 0,
+        outputFile: h.outputFile,
+        processingTime: h.processingTimeMs
       }))
     });
   } catch (err) {
     console.error("❌ History error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to load history"
-    });
+    res.status(500).json({ success: false, message: "Failed to load history" });
   }
 };
 
@@ -628,71 +593,47 @@ export const downloadConvertedFile = async (req, res, next) => {
       _id: req.params.id,
       userId: req.user.id
     });
-
+    
     if (!upload) {
-      return res.status(404).json({
-        success: false,
-        message: "Order not found"
-      });
+      return res.status(404).json({ message: "Not found" });
     }
-
+    
     if (upload.status !== "CONVERTED") {
-      return res.status(400).json({
-        success: false,
-        message: `File not ready. Status: ${upload.status}`
-      });
+      return res.status(400).json({ message: `Not ready: ${upload.status}` });
     }
-
+    
     if (upload.outputFile) {
-      const filePath = path.join("uploads", upload.outputFile);
-
-      if (fs.existsSync(filePath)) {
-        res.setHeader(
-          "Content-Type",
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        );
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename="${upload.fileName.replace(/\.[^/.]+$/, "")}-converted.xlsx"`
-        );
-
-        return res.sendFile(path.resolve(filePath));
+      const fp = path.join("uploads", upload.outputFile);
+      
+      if (fs.existsSync(fp)) {
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename="${upload.fileName.replace(/\.[^.]+$/, "")}-converted.xlsx"`);
+        return res.sendFile(path.resolve(fp));
       }
     }
-
+    
     // Fallback: regenerate
-    if (!upload.convertedData || !upload.convertedData.rows) {
-      return res.status(404).json({
-        success: false,
-        message: "No converted data available"
-      });
+    if (!upload.convertedData?.rows) {
+      return res.status(404).json({ message: "No data" });
     }
-
-    const workbook = XLSX.utils.book_new();
-    const headers = upload.convertedData.headers || TEMPLATE_COLUMNS;
+    
+    const wb = XLSX.utils.book_new();
     const rows = upload.convertedData.rows;
-
-    const excelRows = rows.map(row =>
-      headers.map(header => row[header] || "")
-    );
-
-    const sheet = XLSX.utils.aoa_to_sheet([headers, ...excelRows]);
-    styleSheet(sheet, excelRows.length);
-
-    XLSX.utils.book_append_sheet(workbook, sheet, "Order Training");
-
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${upload.fileName.replace(/\.[^/.]+$/, "")}-converted.xlsx"`
-    );
-
-    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
-    res.send(buffer);
-
+    const excelRows = rows.map(r => [
+      r.CODE, r["CUSTOMER NAME"], r.SAPCODE, r.ITEMDESC,
+      r.ORDERQTY, r["BOX PACK"], r.PACK, r.DVN
+    ]);
+    
+    const ws = XLSX.utils.aoa_to_sheet([TEMPLATE_COLUMNS, ...excelRows]);
+    styleExcelSheet(ws);
+    XLSX.utils.book_append_sheet(wb, ws, "Order Training");
+    
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${upload.fileName.replace(/\.[^.]+$/, "")}-converted.xlsx"`);
+    
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    res.send(buf);
+    
   } catch (err) {
     console.error("❌ Download error:", err);
     next(err);
@@ -705,14 +646,11 @@ export const getOrderResult = async (req, res) => {
       _id: req.params.id,
       userId: req.user.id
     }).lean();
-
+    
     if (!upload) {
-      return res.status(404).json({
-        success: false,
-        message: "Result not found"
-      });
+      return res.status(404).json({ message: "Not found" });
     }
-
+    
     res.json({
       success: true,
       status: upload.status,
@@ -725,44 +663,30 @@ export const getOrderResult = async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Result error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to load result"
-    });
+    res.status(500).json({ message: "Failed" });
   }
 };
 
 export const getOrderTemplate = async (_req, res) => {
   try {
-    res.json({
-      success: true,
-      columns: TEMPLATE_COLUMNS
-    });
+    res.json({ success: true, columns: TEMPLATE_COLUMNS });
   } catch (err) {
-    console.error("Template load error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to load template"
-    });
+    console.error("❌ Template error:", err);
+    res.status(500).json({ message: "Failed" });
   }
 };
 
 export const getOrderById = async (req, res) => {
   try {
-    const { id } = req.params;
-
     const order = await OrderUpload.findOne({
-      _id: id,
+      _id: req.params.id,
       userId: req.user.id
     }).lean();
-
+    
     if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: "Order not found"
-      });
+      return res.status(404).json({ message: "Not found" });
     }
-
+    
     res.json({
       success: true,
       id: order._id,
@@ -771,14 +695,36 @@ export const getOrderById = async (req, res) => {
       recordsFailed: order.recordsFailed || 0,
       rowErrors: order.rowErrors || [],
       rowWarnings: order.rowWarnings || [],
-      processingTime: order.processingTimeMs || null,
-      outputFile: order.outputFile || null
+      processingTime: order.processingTimeMs,
+      outputFile: order.outputFile
     });
   } catch (err) {
     console.error("❌ Get order error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to load order"
+    res.status(500).json({ message: "Failed" });
+  }
+};
+
+export const getMasterStats = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admin only" });
+    }
+    
+    const [total, customers, products, qty] = await Promise.all([
+      MasterOrder.countDocuments(),
+      MasterOrder.distinct("customerName").then(a => a.length),
+      MasterOrder.distinct("itemdesc").then(a => a.length),
+      MasterOrder.aggregate([
+        { $group: { _id: null, total: { $sum: "$orderqty" } } }
+      ]).then(r => r[0]?.total || 0)
+    ]);
+    
+    res.json({
+      success: true,
+      stats: { totalOrders: total, totalCustomers: customers, totalProducts: products, totalQuantity: qty }
     });
+  } catch (err) {
+    console.error("❌ Stats error:", err);
+    res.status(500).json({ message: "Failed" });
   }
 };

@@ -14,6 +14,15 @@ const masterOrderSchema = new mongoose.Schema(
       index: true,
     },
 
+    // Unique Deduplication Key: MD5(customerName + itemdesc)
+    dedupKey: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+      trim: true
+    },
+
     code: {
       type: String, // Customer code
       trim: true,
