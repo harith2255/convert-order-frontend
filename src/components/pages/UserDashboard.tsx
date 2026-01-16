@@ -47,38 +47,45 @@ export function UserDashboard() {
       )
     },
     {
-      key: 'uploadDate',
+      key: 'createdAt',
       label: 'Upload Date',
-      render: (value: string) => new Date(value).toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }),
+      render: (value: any, row: any) => {
+        const dateValue = value || row.uploadDate || row.createdAtText;
+        if (!dateValue) return <span className="text-neutral-400">-</span>;
+        
+        // If it's the pre-formatted text from backend, use it
+        if (typeof dateValue === 'string' && dateValue.includes(',')) {
+          return dateValue;
+        }
+
+        const date = new Date(dateValue);
+        return isNaN(date.getTime()) ? (
+          <span className="text-neutral-400">Invalid Date</span>
+        ) : (
+          date.toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })
+        );
+      },
     },
-   {
-  key: 'status',
-  label: 'Status',
-  render: (value: string) => {
-    if (value === "CONVERTED") {
-      return <Badge variant="success">Success</Badge>;
-    }
-
-    if (value === "FAILED") {
-      return <Badge variant="error">Failed</Badge>;
-    }
-
-    // Anything else = in progress
-    return <Badge variant="neutral">Processing</Badge>;
-  },
-},
-
+    {
+      key: 'status',
+      label: 'Status',
+      render: (value: string) => {
+        if (value === "CONVERTED") return <Badge variant="success">Success</Badge>;
+        if (value === "FAILED") return <Badge variant="error">Failed</Badge>;
+        return <Badge variant="neutral">{value || "Processing"}</Badge>;
+      },
+    },
     { 
       key: 'recordsProcessed', 
       label: 'Records',
-      render: (value: number, row: any) => (
-        <span>{value || 0}</span>
+      render: (value: any, row: any) => (
+        <span>{value ?? row.processed ?? row.successCount ?? 0}</span>
       )
     },
   ];

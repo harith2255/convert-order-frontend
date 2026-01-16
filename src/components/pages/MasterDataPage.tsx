@@ -7,59 +7,47 @@ import { toast } from "sonner";
 import { masterDataApi } from "../../services/masterDataApi";
 import { CustomerTable } from "../admin/CustomerTable";
 import { ProductManagement } from "../admin/ProductManagement";
+import { SchemeTable } from "../admin/SchemeTable";
 
 export function MasterDataPage() {
-  const [customerFile, setCustomerFile] = useState<File | null>(null);
-  const [productFile, setProductFile] = useState<File | null>(null);
 
-  const [loadingCustomer, setLoadingCustomer] = useState(false);
-  const [loadingProduct, setLoadingProduct] = useState(false);
+  const [dbFile, setDbFile] = useState<File | null>(null);
+
+  const [loadingDb, setLoadingDb] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+
 
   /* ===========================
-     CUSTOMER UPLOAD
+     DATABASE OPERATIONS
   ============================ */
-  const uploadCustomers = async () => {
-    if (!customerFile) {
-      toast.error("Please select a customer file");
-      return;
-    }
-
+  const handleExport = async () => {
     try {
-      setLoadingCustomer(true);
-      const res = await masterDataApi.uploadCustomers(customerFile);
-
-      toast.success(
-        `Customers uploaded: ${res.data.inserted}, Skipped: ${res.data.skipped}`
-      );
-      setCustomerFile(null);
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || "Customer upload failed");
+      setExporting(true);
+      await masterDataApi.exportMasterData();
+      toast.success("Master data exported");
+    } catch {
+      toast.error("Export failed");
     } finally {
-      setLoadingCustomer(false);
+      setExporting(false);
     }
   };
 
-  /* ===========================
-     PRODUCT UPLOAD
-  ============================ */
-  const uploadProducts = async () => {
-    if (!productFile) {
-      toast.error("Please select a product file");
+  const uploadDatabase = async () => {
+    if (!dbFile) {
+      toast.error("Please select a database file");
       return;
     }
 
     try {
-      setLoadingProduct(true);
-      const res = await masterDataApi.uploadProducts(productFile);
-
-      toast.success(
-        `Products uploaded: ${res.data.inserted}, Skipped: ${res.data.skipped}`
-      );
-      setProductFile(null);
+      setLoadingDb(true);
+      const res = await masterDataApi.uploadDatabase(dbFile);
+      toast.success(res.data?.message || "Database updated successfully");
+      setDbFile(null);
     } catch (err: any) {
-      toast.error(err.response?.data?.error || "Product upload failed");
+      toast.error(err.response?.data?.error || "Database upload failed");
     } finally {
-      setLoadingProduct(false);
+      setLoadingDb(false);
     }
   };
 
@@ -81,99 +69,69 @@ export function MasterDataPage() {
         </div>
       </Card>
 
-      {/* CUSTOMER UPLOAD */}
-   <Card>
-  <h3 className="font-semibold mb-3">Customer Master Upload</h3>
+      <Card>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-semibold">Database Management</h3>
+          <Button
+            variant="secondary"
+            onClick={handleExport}
+            isLoading={exporting}
+            className="flex items-center gap-2"
+          >
+            <Download className="w-4 h-4" />
+            Export Master Data
+          </Button>
+        </div>
 
-  {/* Hidden input */}
-  <input
-    type="file"
-    accept=".xlsx,.xls"
-    id="customerFileInput"
-    className="hidden"
-    onChange={(e) => setCustomerFile(e.target.files?.[0] || null)}
-  />
+        <div className="p-4 border border-dashed border-neutral-200 rounded-lg">
+          <p className="text-sm text-neutral-600 mb-3">
+            Bulk update database using a full master file. This will update both
+            customers and products.
+          </p>
 
-  <div className="flex items-center gap-3">
-    {/* Select file button */}
-    <Button
-      variant="secondary"
-      onClick={() =>
-        document.getElementById("customerFileInput")?.click()
-      }
-    >
-      Select File
-    </Button>
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            id="dbFileInput"
+            className="hidden"
+            onChange={e => setDbFile(e.target.files?.[0] || null)}
+          />
 
-    {/* Selected file */}
-    {customerFile ? (
-      <Badge variant="success">{customerFile.name}</Badge>
-    ) : (
-      <span className="text-sm text-neutral-500">
-        No file selected
-      </span>
-    )}
-  </div>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => document.getElementById("dbFileInput")?.click()}
+            >
+              Select File
+            </Button>
 
-  {/* Upload button */}
-  <div className="flex justify-end mt-4">
-    <Button
-      onClick={uploadCustomers}
-      isLoading={loadingCustomer}
-      disabled={!customerFile}
-    >
-      Upload Customers
-    </Button>
-  </div>
-</Card>
+            {dbFile ? (
+              <Badge variant="success">{dbFile.name}</Badge>
+            ) : (
+              <span className="text-sm text-neutral-500">No file selected</span>
+            )}
+          </div>
 
+          <div className="flex justify-end mt-4">
+            <Button
+              onClick={uploadDatabase}
+              isLoading={loadingDb}
+              disabled={!dbFile}
+              size="sm"
+            >
+              Bulk Upload database
+            </Button>
+          </div>
+        </div>
+      </Card>
 
-
-      {/* PRODUCT UPLOAD */}
-   <Card>
-  <h3 className="font-semibold mb-3">Product Master Upload</h3>
-
-  <input
-    type="file"
-    accept=".xlsx,.xls"
-    id="productFileInput"
-    className="hidden"
-    onChange={(e) => setProductFile(e.target.files?.[0] || null)}
-  />
-
-  <div className="flex items-center gap-3">
-    <Button
-      variant="secondary"
-      onClick={() =>
-        document.getElementById("productFileInput")?.click()
-      }
-    >
-      Select File
-    </Button>
-
-    {productFile ? (
-      <Badge variant="success">{productFile.name}</Badge>
-    ) : (
-      <span className="text-sm text-neutral-500">
-        No file selected
-      </span>
-    )}
-  </div>
-
-  <div className="flex justify-end mt-4">
-    <Button
-      onClick={uploadProducts}
-      isLoading={loadingProduct}
-      disabled={!productFile}
-    >
-      Upload Products
-    </Button>
-  </div>
-</Card>
 
 
       <CustomerTable />
 <ProductManagement />
+<SchemeTable />
+
     </div>
   );
 }

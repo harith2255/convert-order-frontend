@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Upload, FileText, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { Card } from '../Card';
 import { Button } from '../Button';
+import { Alert, AlertTitle, AlertDescription } from '../ui/alert';
 import api from "../../services/api";
 
 import { useNavigate } from "react-router-dom";
@@ -171,15 +172,15 @@ const handleContinue = async () => {
       </div>
 
       {/* Upload Instructions */}
-      <Card>
-        <div className="flex items-start gap-3 p-4 bg-primary-50 rounded-lg border border-primary-200">
-          <AlertCircle className="w-5 h-5 text-primary-600 flex-shrink-0 mt-0.5" />
-          <div className="text-sm text-primary-900">
-            <p className="font-medium mb-1">Supported File Formats</p>
-            <p className="text-primary-700"> Excel (.xlsx, .xls), CSV (.csv), PDF (.pdf), and Text (.txt) files are supported. Maximum file size: 10MB per file.</p>
-          </div>
+      <Alert variant="info">
+        <AlertCircle className="w-5 h-5 flex-shrink-0" />
+        <div>
+          <AlertTitle className="mb-1">Supported File Formats</AlertTitle>
+          <AlertDescription>
+            Excel (.xlsx, .xls), CSV (.csv), PDF (.pdf), and Text (.txt) files are supported. Maximum file size: 10MB per file.
+          </AlertDescription>
         </div>
-      </Card>
+      </Alert>
 
       {/* Upload Zone */}
       <Card>

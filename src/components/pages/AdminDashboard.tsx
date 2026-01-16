@@ -44,19 +44,40 @@ const [uploads, setUploads] = useState<any[]>([]);
 const [page, setPage] = useState(1);
 const [pagination, setPagination] = useState<any>(null);
 
+
+
+// ✅ NEW - Update to new endpoints
+const loadDashboard = async () => {
+  try {
+    const res = await api.get("/admin/master/dashboard");
+    
+    setStats({
+      totalUsers: res.data.users.total,
+      totalUploads: res.data.uploads.total,
+      failedUploads: res.data.uploads.failed,
+      successRate: res.data.uploads.successRate,
+      successfulConversions: res.data.uploads.completed,
+    });
+
+    setRecentActivity(res.data.recentActivity || []);
+  } catch {
+    toast.error("Failed to load admin dashboard");
+  }
+};
+
 const loadUploads = async (pageNo = 1) => {
-  const res = await api.get("/admin/uploads", {
+  const res = await api.get("/admin/master/audits", {
     params: { page: pageNo, limit: 10 },
   });
 
   setUploads(
     res.data.data.map((u: any) => ({
       file: u.fileName,
-      user: u.userEmail,
+      user: u.user.email,
       status: u.status,
-      processed: u.recordsProcessed ?? 0,
-      failed: u.recordsFailed ?? 0,
-      time: new Date(u.createdAt).toLocaleString(),
+      processed: u.stats?.matched || 0,
+      failed: u.stats?.unmatched || 0,
+      time: new Date(u.uploadDate).toLocaleString(),
     }))
   );
 
@@ -64,35 +85,35 @@ const loadUploads = async (pageNo = 1) => {
   setPage(pageNo);
 };
 
-useEffect(() => {
-  loadUploads(1);
-}, []);
-
- const loadDashboard = async () => {
+// Export button - update to new endpoint
+const handleExport = async () => {
   try {
-    const data = await fetchAdminDashboard();
+    setExporting(true);
+    const res = await api.get("/admin/master/export", {
+      responseType: "blob",
+    });
 
-    setStats(data.stats);
-    setAlerts(data.alerts);
+    const blob = new Blob([res.data], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
 
-    setRecentActivity(
-      (data.recentActivity || []).map((a: any) => ({
-        user: a.user || "System",
-        action: a.action || "UNKNOWN",
-        status: a.status || "Success",
-        time: new Date(a.time).toLocaleString(),
-      }))
-    );
-  } catch {
-    toast.error("Failed to load admin dashboard");
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `master_orders_${Date.now()}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+
+    toast.success("Export completed");
+  } catch (err) {
+    console.error(err);
+    toast.error("Failed to export master data");
+  } finally {
+    setExporting(false);
   }
 };
-
-  useEffect(() => {
-    loadDashboard();
-    
-  }, []);
-
   useEffect(() => {
     const interval = setInterval(loadDashboard, 30000);
     return () => clearInterval(interval);

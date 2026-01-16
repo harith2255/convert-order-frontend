@@ -4,13 +4,19 @@ import { cva, type VariantProps } from "class-variance-authority@0.7.1";
 import { cn } from "./utils";
 
 const alertVariants = cva(
-  "relative w-full rounded-lg border px-4 py-3 text-sm grid has-[>svg]:grid-cols-[calc(var(--spacing)*4)_1fr] grid-cols-[0_1fr] has-[>svg]:gap-x-3 gap-y-0.5 items-start [&>svg]:size-4 [&>svg]:translate-y-0.5 [&>svg]:text-current",
+  "relative w-full rounded-2xl border px-6 py-5 text-base flex items-center gap-4 shadow-sm transition-all",
   {
     variants: {
       variant: {
-        default: "bg-card text-card-foreground",
+        default: "bg-background text-foreground border-border",
         destructive:
-          "text-destructive bg-card [&>svg]:text-current *:data-[slot=alert-description]:text-destructive/90",
+          "border-red-100 bg-[#FFF5F5] text-[#E03131] [&>svg]:text-[#E03131] font-semibold",
+        success:
+          "border-green-100 bg-[#F2FBF5] text-[#1E7E34] [&>svg]:text-[#1E7E34] font-semibold",
+        warning:
+          "border-amber-100 bg-[#FFFBEB] text-[#92400E] [&>svg]:text-[#D97706] font-semibold",
+        info:
+          "border-blue-100 bg-[#F0F7FF] text-[#004085] [&>svg]:text-[#0056b3] font-semibold",
       },
     },
     defaultVariants: {

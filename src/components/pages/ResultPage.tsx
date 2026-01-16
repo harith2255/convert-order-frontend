@@ -10,7 +10,10 @@ import {
   AlertTriangle,
   RefreshCw,
   FileSpreadsheet,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
+import { Alert } from "../ui/alert";
 import { Card } from "../Card";
 import { Button } from "../Button";
 import { Table } from "../Table";
@@ -71,14 +74,22 @@ export function ResultPage() {
         };
 
         setData(conversionData);
-        setSuccess(res.status === "CONVERTED");
+    const isSuccess =
+  res.status === "CONVERTED" ||
+  (
+    (res.recordsProcessed || 0) > 0 &&
+    (!res.errors || res.errors.length === 0)
+  );
+
+setSuccess(isSuccess);
 
         // Show toast based on result
-        if (res.status === "CONVERTED") {
-          toast.success(`✅ ${conversionData.successRows} records converted successfully`);
-        } else {
-          toast.error("Conversion completed with errors");
-        }
+       if (isSuccess) {
+  toast.success(`✅ ${conversionData.successRows} records converted successfully`);
+} else {
+  toast.error("Conversion completed with errors");
+}
+
         
       } catch (err: any) {
         console.error("Result fetch error:", err);
@@ -155,6 +166,19 @@ export function ResultPage() {
             : "Review issues and retry conversion"}
         </p>
       </div>
+
+      {/* ALERT BANNER */}
+      {success ? (
+        <Alert variant="success" className="animate-in fade-in slide-in-from-top-4 duration-500">
+          <CheckCircle2 className="w-6 h-6" />
+          <span>Order quantities processed successfully</span>
+        </Alert>
+      ) : (
+        <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-4 duration-500">
+          <AlertCircle className="w-6 h-6" />
+          <span>Conversion completed with errors</span>
+        </Alert>
+      )}
 
       {/* STATUS CARD */}
       <Card>

@@ -6,7 +6,7 @@ import { Input } from "../Input";
 import { Dropdown } from "../Dropdown";
 import { Table } from "../Table";
 import { Badge } from "../Badge";
-import { Modal } from "../Modal";
+import { CustomModal } from "../Modal";
 import { toast } from "sonner";
 import { adminUsersApi } from "../../services/adminUserApi";
 
@@ -200,7 +200,7 @@ export function UserAccessPage() {
       </Card>
 
       {/* ADD USER MODAL */}
-      <Modal
+      <CustomModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         title="Add New User"
@@ -252,10 +252,10 @@ export function UserAccessPage() {
           value={newUser.status}
           onChange={e => setNewUser({ ...newUser, status: e.target.value })}
         />
-      </Modal>
+      </CustomModal>
 
       {/* CONFIRM MODAL */}
-      <Modal
+      <CustomModal
         isOpen={!!confirmModal}
         onClose={() => setConfirmModal(null)}
         title="Confirm Status Change"
@@ -273,7 +273,7 @@ export function UserAccessPage() {
       >
         Are you sure you want to change status for{" "}
         <b>{confirmModal?.name}</b>?
-      </Modal>
+      </CustomModal>
     </div>
   );
 }

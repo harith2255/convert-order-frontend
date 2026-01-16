@@ -7,7 +7,7 @@ import { Input } from '../Input';
 import { Dropdown } from '../Dropdown';
 import { Table } from '../Table';
 import { Badge } from '../Badge';
-import { Modal } from '../Modal';
+import { CustomModal } from '../Modal';
 import api from '../../services/api';
 import { toast } from 'sonner';
 import { downloadOrderFile } from '../../services/orderApi';
@@ -27,21 +27,28 @@ export function HistoryPage() {
     return () => clearTimeout(timer);
   }, [searchTerm, statusFilter]);
 
-  const fetchHistory = async () => {
-    try {
-      const res = await api.get("/orders/history", {
-        params: {
-          search: searchTerm,
-          status: statusFilter === "all" ? "all" : statusFilter.toUpperCase(),
-        },
-      });
-      setHistory(res.data.history);
-    } catch {
-      toast.error("Failed to load history");
-    } finally {
-      setLoading(false);
-    }
-  };
+const fetchHistory = async () => {
+  try {
+    const res = await api.get("/orders/history", {
+      params: {
+        search: searchTerm,
+        status: statusFilter === "all" ? "all" : statusFilter.toUpperCase(),
+      },
+    });
+
+    // ✅ HARD GUARANTEE: history is always an array
+    setHistory(Array.isArray(res.data?.history) ? res.data.history : []);
+  } catch (err) {
+    console.error("History fetch failed:", err);
+    toast.error("Failed to load history");
+
+    // ✅ NEVER leave history undefined
+    setHistory([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const handleViewDetails = (row: any) => {
     navigate(`/result/${row.id}`);
@@ -81,15 +88,28 @@ export function HistoryPage() {
       )
     },
     { 
-      key: 'uploadDate', 
+      key: 'createdAt', 
       label: 'Upload Date',
-      render: (value: string) => new Date(value).toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
+      render: (value: any, row: any) => {
+        const dateValue = value || row.uploadDate || row.createdAtText;
+        if (!dateValue) return <span className="text-neutral-400">N/A</span>;
+        
+        // If it's the pre-formatted text from backend, use it
+        if (typeof dateValue === 'string' && dateValue.includes(',')) {
+          return dateValue;
+        }
+
+        const date = new Date(dateValue);
+        if (isNaN(date.getTime())) return <span className="text-neutral-400 italic">Invalid Date</span>;
+        
+        return date.toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      }
     },
     {
       key: 'status',
@@ -102,16 +122,28 @@ export function HistoryPage() {
             : "neutral"
           }
         >
-          {value}
+          {value || "PROCESSING"}
         </Badge>
       )
     },
     {
       key: 'recordsProcessed',
       label: 'Processed',
-      render: (value: number, row: any) => (
-        <span>{value} / {value + (row.recordsFailed ?? 0)}</span>
-      )
+      render: (value: any, row: any) => {
+        // Handle common backend field variations
+        const processed = typeof value === 'number' ? value : (row.processed ?? row.recordsProcessed ?? row.successCount ?? 0);
+        const failed = typeof row.recordsFailed === 'number' ? row.recordsFailed : (row.failedCount ?? 0);
+        const total = processed + failed;
+        
+        if (total === 0 && !processed) return <span className="text-neutral-400">0 / 0</span>;
+        
+        return (
+          <div className="flex flex-col">
+            <span className="font-medium text-neutral-900">{processed} / {total}</span>
+            {failed > 0 && <span className="text-[10px] text-red-500 font-medium">-{failed} errors</span>}
+          </div>
+        );
+      }
     },
     {
       key: 'actions',
@@ -216,7 +248,10 @@ export function HistoryPage() {
         <Card padding="sm">
           <p className="text-sm text-neutral-600 mb-1">Total Records</p>
           <p className="text-2xl font-semibold text-neutral-900">
-            {history.reduce((acc, h) => acc + (h.recordsProcessed || 0), 0)}
+            {history.reduce((acc, h) => {
+              const processed = typeof h.processed === 'number' ? h.processed : (h.recordsProcessed ?? h.successCount ?? 0);
+              return acc + processed;
+            }, 0)}
           </p>
         </Card>
       </div>
@@ -258,7 +293,7 @@ export function HistoryPage() {
       </Card>
 
       {/* Log Details Modal */}
-      <Modal
+      <CustomModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title="Conversion Details"
@@ -280,7 +315,7 @@ export function HistoryPage() {
               <div>
                 <p className="text-sm text-neutral-600 mb-1">Upload Date</p>
                 <p className="font-medium text-neutral-900">
-                  {new Date(selectedLog.uploadDate).toLocaleString()}
+                  {selectedLog.uploadDate ? new Date(selectedLog.uploadDate).toLocaleString() : '-'}
                 </p>
               </div>
               <div>
@@ -339,7 +374,7 @@ export function HistoryPage() {
             </div>
           </div>
         )}
-      </Modal>
+      </CustomModal>
     </div>
   );
 }
