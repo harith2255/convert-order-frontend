@@ -10,9 +10,14 @@ import { CustomModal } from "../Modal";
 interface Product {
   _id: string;
   productCode: string;
-  productName: string;
+  productName: string;           // raw SAP
+  cleanedProductName?: string;   // normalized
+  baseName?: string;
+  dosage?: string;
+  variant?: string;
   division?: string;
 }
+
 
 export function ProductManagement() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -150,9 +155,11 @@ export function ProductManagement() {
               </tr>
             ) : (
               products.map((product) => (
-                <tr key={product._id} className="border-b hover:bg-neutral-50">
+                 <tr key={product._id} className="border-b hover:bg-neutral-50">
                   <td className="p-2">{product.productCode}</td>
-                  <td className="p-2">{product.productName}</td>
+                  <td className="p-2 font-medium">
+                    {product.cleanedProductName || product.productName}
+                  </td>
                   <td className="p-2">{product.division || "-"}</td>
                   <td className="p-2 text-right">
                     <button
