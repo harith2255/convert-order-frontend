@@ -1,19 +1,24 @@
+/**
+ * SCHEME TABLE - FIXED VERSION
+ * Fixes: Data display, search functionality, proper field mapping
+ */
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { masterDataApi } from "../../services/masterDataApi";
 import { Button } from "../Button";
 import { Card } from "../Card";
 import { Input } from "../Input";
-import { Trash2, Edit2, Plus, Eye } from "lucide-react";
+import { Trash2, Edit2, Plus, Eye, RefreshCw } from "lucide-react";
 import { CustomModal } from "../Modal";
 
 interface Scheme {
   _id: string;
-  schemeCode: string;
-  schemeName: string;
-  description?: string;
-  validFrom?: string;
-  validTo?: string;
+  productCode: string;
+  productName: string;
+  division: string;
+  minQty: number;
+  freeQty: number;
+  schemePercent: number;
   isActive?: boolean;
 }
 
@@ -21,7 +26,7 @@ export function SchemeTable() {
   const [schemes, setSchemes] = useState<Scheme[]>([]);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const limit = 10;
+  const limit = 20;
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
 
@@ -29,11 +34,12 @@ export function SchemeTable() {
   const [viewMode, setViewMode] = useState(false);
   const [editingScheme, setEditingScheme] = useState<Scheme | null>(null);
   const [formData, setFormData] = useState<Partial<Scheme>>({
-    schemeCode: "",
-    schemeName: "",
-    description: "",
-    validFrom: "",
-    validTo: "",
+    productCode: "",
+    productName: "",
+    division: "",
+    minQty: 0,
+    freeQty: 0,
+    schemePercent: 0,
     isActive: true
   });
 
@@ -41,9 +47,19 @@ export function SchemeTable() {
     try {
       setLoading(true);
       const res = await masterDataApi.getSchemes(search, page, limit);
-      setSchemes(res.data || []);
-      setTotal(res.total || 0);
-    } catch {
+      
+      console.log("Schemes API Response:", res); // Debug log
+      
+      // ✅ HANDLE DIFFERENT RESPONSE STRUCTURES
+      const schemeData = res.data?.data || res.data || [];
+      const schemeTotal = res.data?.total || res.total || 0;
+      
+      setSchemes(Array.isArray(schemeData) ? schemeData : []);
+      setTotal(schemeTotal);
+      
+      console.log(`Loaded ${schemeData.length} schemes`);
+    } catch (err) {
+      console.error("Scheme load error:", err);
       toast.error("Failed to load schemes");
       setSchemes([]);
     } finally {
@@ -59,11 +75,12 @@ export function SchemeTable() {
     setEditingScheme(null);
     setViewMode(false);
     setFormData({
-      schemeCode: "",
-      schemeName: "",
-      description: "",
-      validFrom: "",
-      validTo: "",
+      productCode: "",
+      productName: "",
+      division: "",
+      minQty: 0,
+      freeQty: 0,
+      schemePercent: 0,
       isActive: true
     });
     setIsModalOpen(true);
@@ -85,8 +102,8 @@ export function SchemeTable() {
 
   const handleSave = async () => {
     try {
-      if (!formData.schemeCode?.trim() || !formData.schemeName?.trim()) {
-        toast.error("Scheme code and name are required");
+      if (!formData.productCode?.trim() || !formData.productName?.trim()) {
+        toast.error("Product code and name are required");
         return;
       }
 
@@ -101,6 +118,7 @@ export function SchemeTable() {
       setIsModalOpen(false);
       loadSchemes();
     } catch (err: any) {
+      console.error("Scheme save error:", err);
       toast.error(err.response?.data?.error || "Operation failed");
     }
   };
@@ -112,59 +130,109 @@ export function SchemeTable() {
       await masterDataApi.deleteScheme(id);
       toast.success("Scheme deleted");
       loadSchemes();
-    } catch {
+    } catch (err) {
+      console.error("Scheme delete error:", err);
       toast.error("Delete failed");
     }
   };
 
+  const totalPages = Math.ceil(total / limit);
+
   return (
     <Card>
       <div className="flex justify-between items-center mb-3">
-        <h3 className="text-lg font-semibold">Schemes</h3>
+        <h3 className="text-lg font-semibold">
+          Schemes ({total})
+        </h3>
         <Button size="sm" onClick={openCreate}>
           <Plus className="w-4 h-4 mr-1" /> Add Scheme
         </Button>
       </div>
 
       <Input
-        placeholder="Search scheme code or name"
+        placeholder="Search product code or name"
         value={search}
-        onChange={e => setSearch(e.target.value)}
+        onChange={e => {
+          setSearch(e.target.value);
+          setPage(1); // Reset to first page on search
+        }}
+        className="mb-3"
       />
 
-      <div className="mt-4 overflow-x-auto">
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="bg-neutral-100">
             <tr className="border-b">
-              <th className="text-left p-2">Code</th>
-              <th className="text-left p-2">Name</th>
-              <th className="text-left p-2">Active</th>
+              <th className="text-left p-2">Product Code</th>
+              <th className="text-left p-2">Product Name</th>
+              <th className="text-left p-2">Division</th>
+              <th className="text-center p-2">Min Qty</th>
+              <th className="text-center p-2">Free Qty</th>
+              <th className="text-center p-2">Scheme %</th>
+              <th className="text-center p-2">Active</th>
               <th className="text-right p-2">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={4} className="text-center p-4">Loading…</td></tr>
+              <tr>
+                <td colSpan={8} className="text-center p-8">
+                  <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-primary-600" />
+                  <p className="text-neutral-500">Loading schemes...</p>
+                </td>
+              </tr>
             ) : schemes.length === 0 ? (
-              <tr><td colSpan={4} className="text-center p-4 text-neutral-500">No schemes found</td></tr>
+              <tr>
+                <td colSpan={8} className="text-center p-8 text-neutral-500">
+                  {search ? "No schemes found matching your search" : "No schemes configured yet"}
+                </td>
+              </tr>
             ) : (
               schemes.map(s => (
                 <tr key={s._id} className="border-b hover:bg-neutral-50">
-                  <td className="p-2">{s.schemeCode}</td>
-                  <td className="p-2">{s.schemeName}</td>
+                  <td className="p-2 font-mono text-xs">{s.productCode}</td>
+                  <td className="p-2">{s.productName}</td>
                   <td className="p-2">
-                    {s.isActive ? "Yes" : "No"}
+                    <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs">
+                      {s.division}
+                    </span>
+                  </td>
+                  <td className="p-2 text-center">{s.minQty || 0}</td>
+                  <td className="p-2 text-center">{s.freeQty || 0}</td>
+                  <td className="p-2 text-center">
+                    {s.schemePercent ? `${s.schemePercent}%` : "-"}
+                  </td>
+                  <td className="p-2 text-center">
+                    {s.isActive ? (
+                      <span className="text-green-600">✓</span>
+                    ) : (
+                      <span className="text-red-600">✗</span>
+                    )}
                   </td>
                   <td className="p-2 text-right">
-                    <button onClick={() => openView(s)} className="text-green-600 mr-2">
-                      <Eye className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => openEdit(s)} className="text-blue-600 mr-2">
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => handleDelete(s._id)} className="text-red-600">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex justify-end gap-2">
+                      <button 
+                        onClick={() => openView(s)} 
+                        className="text-blue-600 hover:text-blue-700"
+                        title="View details"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => openEdit(s)} 
+                        className="text-green-600 hover:text-green-700"
+                        title="Edit scheme"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(s._id)} 
+                        className="text-red-600 hover:text-red-700"
+                        title="Delete scheme"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -173,51 +241,134 @@ export function SchemeTable() {
         </table>
       </div>
 
-      {/* Modal */}
+      {/* ✅ PAGINATION */}
+      {totalPages > 1 && (
+        <div className="flex justify-between items-center mt-4 pt-4 border-t">
+          <p className="text-sm text-neutral-600">
+            Showing {(page - 1) * limit + 1} to {Math.min(page * limit, total)} of {total} schemes
+          </p>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+            >
+              Previous
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ MODAL */}
       <CustomModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={viewMode ? "Scheme Details" : editingScheme ? "Edit Scheme" : "Add Scheme"}
+        title={
+          viewMode 
+            ? "Scheme Details" 
+            : editingScheme 
+            ? "Edit Scheme" 
+            : "Add Scheme"
+        }
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
               {viewMode ? "Close" : "Cancel"}
             </Button>
-            {!viewMode && <Button onClick={handleSave}>Save</Button>}
+            {!viewMode && (
+              <Button onClick={handleSave}>
+                {editingScheme ? "Update" : "Create"}
+              </Button>
+            )}
           </>
         }
       >
         <div className="space-y-3">
-          <Input
-            value={formData.schemeCode || ""}
-            onChange={e => setFormData({ ...formData, schemeCode: e.target.value })}
-            disabled={viewMode || !!editingScheme}
-            placeholder="Scheme Code"
-          />
-          <Input
-            value={formData.schemeName || ""}
-            onChange={e => setFormData({ ...formData, schemeName: e.target.value })}
-            disabled={viewMode}
-            placeholder="Scheme Name"
-          />
-          <Input
-            value={formData.description || ""}
-            onChange={e => setFormData({ ...formData, description: e.target.value })}
-            disabled={viewMode}
-            placeholder="Description"
-          />
-          <Input
-            value={formData.validFrom || ""}
-            onChange={e => setFormData({ ...formData, validFrom: e.target.value })}
-            disabled={viewMode}
-            placeholder="Valid From (DD/MM/YYYY)"
-          />
-          <Input
-            value={formData.validTo || ""}
-            onChange={e => setFormData({ ...formData, validTo: e.target.value })}
-            disabled={viewMode}
-            placeholder="Valid To (DD/MM/YYYY)"
-          />
+          <div>
+            <label className="text-sm font-medium mb-1 block">Product Code</label>
+            <Input
+              value={formData.productCode || ""}
+              onChange={e => setFormData({ ...formData, productCode: e.target.value })}
+              disabled={viewMode || !!editingScheme}
+              placeholder="SAP Product Code"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium mb-1 block">Product Name</label>
+            <Input
+              value={formData.productName || ""}
+              onChange={e => setFormData({ ...formData, productName: e.target.value })}
+              disabled={viewMode}
+              placeholder="Product Name"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium mb-1 block">Division</label>
+            <Input
+              value={formData.division || ""}
+              onChange={e => setFormData({ ...formData, division: e.target.value })}
+              disabled={viewMode}
+              placeholder="e.g., CAR1, GTF1"
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="text-sm font-medium mb-1 block">Min Qty</label>
+              <Input
+                type="number"
+                value={formData.minQty || 0}
+                onChange={e => setFormData({ ...formData, minQty: Number(e.target.value) })}
+                disabled={viewMode}
+                placeholder="0"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1 block">Free Qty</label>
+              <Input
+                type="number"
+                value={formData.freeQty || 0}
+                onChange={e => setFormData({ ...formData, freeQty: Number(e.target.value) })}
+                disabled={viewMode}
+                placeholder="0"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1 block">Scheme %</label>
+              <Input
+                type="number"
+                value={formData.schemePercent || 0}
+                onChange={e => setFormData({ ...formData, schemePercent: Number(e.target.value) })}
+                disabled={viewMode}
+                placeholder="0"
+              />
+            </div>
+          </div>
+
+          {!viewMode && (
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={formData.isActive !== false}
+                onChange={e => setFormData({ ...formData, isActive: e.target.checked })}
+                className="w-4 h-4"
+              />
+              <label className="text-sm">Active</label>
+            </div>
+          )}
         </div>
       </CustomModal>
     </Card>

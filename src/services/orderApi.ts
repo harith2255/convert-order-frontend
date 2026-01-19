@@ -52,3 +52,24 @@ export const downloadOrderFile = async (id: string) => {
     throw error;
   }
 };
+
+export const downloadSchemeFile = async (id: string) => {
+  const res = await api.get(`/orders/${id}/scheme-file`, {
+    responseType: "blob"
+  });
+
+  const blob = new Blob([res.data], {
+    type:
+      res.headers["content-type"] ||
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  });
+
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `scheme-summary-${id}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};

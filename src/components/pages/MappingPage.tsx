@@ -1,15 +1,16 @@
 /**
- * ORDER QUANTITY REVIEW PAGE
- * Pharma-safe, master-driven architecture
+ * MAPPING PAGE - FIXED VERSION
+ * Fixes: Customer selection dropdown, candidate handling, proper code passing
  */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   ArrowRight,
   CheckCircle2,
   Search,
   User,
   X,
-  RefreshCw
+  RefreshCw,
+  AlertTriangle
 } from "lucide-react";
 import { Card } from "../Card";
 import { Button } from "../Button";
@@ -33,7 +34,9 @@ export function MappingPage() {
   const [customerInput, setCustomerInput] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [searching, setSearching] = useState(false);
-const autoCustomerLocked = React.useRef(false);
+  const [showCandidates, setShowCandidates] = useState(false);
+  
+  const autoCustomerLocked = useRef(false);
 
   /* ✅ MASTER PRODUCTS FOR MANUAL MAPPING */
   const [allProducts, setAllProducts] = useState<any[]>([]);
@@ -46,64 +49,78 @@ const autoCustomerLocked = React.useRef(false);
       .catch(() => setAllProducts([]));
   }, []);
 
-  /* ---------------- CUSTOMER SEARCH ---------------- */
- useEffect(() => {
-  // 🔒 Do NOT search if auto customer is locked
-  if (autoCustomerLocked.current) return;
+  /* ---------------- CUSTOMER SEARCH (DEBOUNCED) ---------------- */
+  useEffect(() => {
+    if (autoCustomerLocked.current) return;
+    if (!customerInput || customerInput.length < 2) {
+      setCustomers([]);
+      return;
+    }
 
-  if (!customerInput) return;
+    const timer = setTimeout(() => {
+      setSearching(true);
+      api
+        .get("/admin/customers", {
+          params: { search: customerInput, limit: 100 }
+        })
+        .then(res => setCustomers(res.data?.data || []))
+        .catch(() => setCustomers([]))
+        .finally(() => setSearching(false));
+    }, 400);
 
-  const timer = setTimeout(() => {
-    setSearching(true);
-    api
-      .get("/admin/customers", {
-        params: { search: customerInput, limit: 100 }
-      })
-      .then(res => setCustomers(res.data?.data || []))
-      .catch(() => setCustomers([]))
-      .finally(() => setSearching(false));
-  }, 400);
-
-  return () => clearTimeout(timer);
-}, [customerInput]);
-
+    return () => clearTimeout(timer);
+  }, [customerInput]);
 
   /* ---------------- INIT ---------------- */
-useEffect(() => {
-  if (!parsedResult?.dataRows || !parsedResult.uploadId) {
-    toast.error("Invalid upload session. Please re-upload.");
-    navigate("/upload");
-    return;
-  }
+  useEffect(() => {
+    if (!parsedResult?.dataRows || !parsedResult.uploadId) {
+      toast.error("Invalid upload session. Please re-upload.");
+      navigate("/upload");
+      return;
+    }
 
-  setRows(parsedResult.dataRows);
-  setUploadId(parsedResult.uploadId);
+    setRows(parsedResult.dataRows);
+    setUploadId(parsedResult.uploadId);
 
-  // ✅ AUTO SET CUSTOMER (LOCKED)
-// ✅ AUTO FILL CUSTOMER NAME (ALWAYS)
-if (parsedResult.customer?.name && !autoCustomerLocked.current) {
-  setCustomerInput(parsedResult.customer.name);
+    // ✅ HANDLE CUSTOMER AUTO-FILL
+    if (parsedResult.customer) {
+      const { name, code, candidates, source } = parsedResult.customer;
 
-  // 🔒 Lock ONLY if master code exists
-  if (parsedResult.customer.code) {
-    setSelectedCustomer({
-      customerCode: parsedResult.customer.code,
-      customerName: parsedResult.customer.name,
-      confidence: parsedResult.customer.confidence,
-      source: parsedResult.customer.source
-    });
+      // Set input field
+      if (name) {
+        setCustomerInput(name);
+      }
 
-    autoCustomerLocked.current = true; // lock only on master match
-  }
-}
+      // ✅ AUTO-SELECT IF UNIQUE MATCH
+      if (source === 'AUTO_UNIQUE' && code) {
+        setSelectedCustomer({
+          customerCode: code,
+          customerName: name,
+          city: parsedResult.customer.city,
+          state: parsedResult.customer.state
+        });
+        autoCustomerLocked.current = true;
+        toast.success(`Auto-selected: ${name}`);
+      }
 
+      // ✅ SHOW CANDIDATES IF MULTIPLE MATCHES
+      if (source === 'MANUAL_REQUIRED' && candidates?.length > 0) {
+        setCustomers(candidates);
+        setShowCandidates(true);
+        toast.warning(`Multiple customers found for "${name}". Please select one.`);
+      }
 
-  parsedResult.dataRows.forEach((row: any, i: number) =>
-    validateRow(i, row)
-  );
-}, [parsedResult, navigate]);
+      // ⚠️ NOT FOUND IN MASTER
+      if (source === 'NOT_FOUND') {
+        toast.warning(`Customer "${name}" not found in master. Please search and select.`);
+      }
+    }
 
-
+    // Validate rows
+    parsedResult.dataRows.forEach((row: any, i: number) =>
+      validateRow(i, row)
+    );
+  }, [parsedResult, navigate]);
 
   /* ---------------- VALIDATION ---------------- */
   const validateRow = (index: number, row: any) => {
@@ -132,7 +149,7 @@ if (parsedResult.customer?.name && !autoCustomerLocked.current) {
       return;
     }
 
-    /* ✅ BLOCK IF UNMAPPED */
+    // ✅ BLOCK IF UNMAPPED PRODUCTS
     const unmapped = rows.some(
       r => !r.matchedProduct && !r.manualProduct
     );
@@ -144,6 +161,8 @@ if (parsedResult.customer?.name && !autoCustomerLocked.current) {
 
     try {
       setConverting(true);
+      
+      // ✅ PASS CUSTOMER CODE TO BACKEND
       const res = await api.post("/orders/convert", {
         uploadId,
         customerCode: selectedCustomer.customerCode
@@ -158,99 +177,137 @@ if (parsedResult.customer?.name && !autoCustomerLocked.current) {
     }
   };
 
+  /* ---------------- CUSTOMER SELECTION HANDLER ---------------- */
+  const handleCustomerSelect = (customer: any) => {
+    setSelectedCustomer(customer);
+    setCustomerInput(customer.customerName);
+    setCustomers([]);
+    setShowCandidates(false);
+    autoCustomerLocked.current = true;
+    toast.success(`Selected: ${customer.customerName} (${customer.city || customer.state})`);
+  };
+
   /* ---------------- RENDER ---------------- */
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-6">
       <h1 className="text-2xl font-bold">Review Order Quantities</h1>
-{/* ---------------- CUSTOMER SELECTION ---------------- */}
-<Card>
-  <div className="space-y-2">
-    <label className="text-sm font-medium flex items-center gap-2">
-      <User className="w-4 h-4" />
-      Select Customer (Admin Master)
-    </label>
 
-    <div className="relative">
-      <input
-        value={customerInput}
-       onChange={e => {
-  autoCustomerLocked.current = false; // 🔓 unlock
-  setCustomerInput(e.target.value);
-  setSelectedCustomer(null);
-}}
+      {/* ---------------- CUSTOMER SELECTION ---------------- */}
+      <Card>
+        <div className="space-y-2">
+          <label className="text-sm font-medium flex items-center gap-2">
+            <User className="w-4 h-4" />
+            Select Customer (Admin Master)
+            {showCandidates && (
+              <Badge variant="warning">Multiple matches - please select</Badge>
+            )}
+          </label>
 
-      
-        placeholder="Search customer by name or code"
-        className="w-full border rounded px-3 py-2 pr-10 text-sm"
-      />
+          <div className="relative">
+            <input
+              value={customerInput}
+              onChange={e => {
+                autoCustomerLocked.current = false;
+                setShowCandidates(false);
+                setCustomerInput(e.target.value);
+                setSelectedCustomer(null);
+              }}
+              placeholder="Search customer by name or code"
+              className="w-full border rounded px-3 py-2 pr-10 text-sm"
+              disabled={autoCustomerLocked.current && selectedCustomer}
+            />
 
-      {searching && (
-        <RefreshCw className="absolute right-3 top-2.5 w-4 h-4 animate-spin opacity-60" />
-      )}
-    </div>
+            {searching && (
+              <RefreshCw className="absolute right-3 top-2.5 w-4 h-4 animate-spin opacity-60" />
+            )}
 
-    {/* DROPDOWN RESULTS */}
-    {customerInput && customers.length > 0 && !selectedCustomer && (
-      <div className="border rounded max-h-56 overflow-auto bg-white shadow-sm">
-        {customers.map(c => (
-          <button
-            key={c._id}
-            type="button"
-            onClick={() => {
-              setSelectedCustomer(c);
-              setCustomerInput(c.customerName);
-            }}
-            className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-100"
-          >
-            <div className="font-medium">{c.customerName}</div>
-            <div className="text-xs opacity-60">
-              {c.customerCode} • {c.city || c.state || ""}
+            {selectedCustomer && autoCustomerLocked.current && (
+              <button
+                onClick={() => {
+                  autoCustomerLocked.current = false;
+                  setSelectedCustomer(null);
+                  setCustomerInput("");
+                }}
+                className="absolute right-3 top-2.5 text-neutral-400 hover:text-neutral-600"
+                title="Clear selection"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* ✅ DROPDOWN RESULTS */}
+          {(customerInput && customers.length > 0 && !selectedCustomer) && (
+            <div className="border rounded max-h-56 overflow-auto bg-white shadow-lg z-10">
+              {customers.map(c => (
+                <button
+                  key={c._id || c.customerCode}
+                  type="button"
+                  onClick={() => handleCustomerSelect(c)}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b last:border-b-0"
+                >
+                  <div className="font-medium">{c.customerName}</div>
+                  <div className="text-xs text-neutral-500">
+                    Code: {c.customerCode}
+                    {(c.city || c.state) && (
+                      <span className="ml-2">• {c.city || c.state}</span>
+                    )}
+                  </div>
+                </button>
+              ))}
             </div>
-          </button>
-        ))}
-      </div>
-    )}
+          )}
 
-    {/* SELECTED CUSTOMER */}
-    {selectedCustomer && (
-      <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded px-3 py-2 text-sm">
-        <div>
-          <div className="font-medium text-green-800">
-            {selectedCustomer.customerName}
-          </div>
-          <div className="text-xs opacity-70">
-            Code: {selectedCustomer.customerCode}
-          </div>
+          {/* ✅ SELECTED CUSTOMER DISPLAY */}
+          {selectedCustomer && (
+            <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded px-3 py-2 text-sm">
+              <div>
+                <div className="font-medium text-green-800">
+                  {selectedCustomer.customerName}
+                </div>
+                <div className="text-xs text-green-700">
+                  Code: {selectedCustomer.customerCode}
+                  {(selectedCustomer.city || selectedCustomer.state) && (
+                    <span className="ml-2">
+                      • {selectedCustomer.city || selectedCustomer.state}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {!autoCustomerLocked.current && (
+                <button
+                  onClick={() => {
+                    setSelectedCustomer(null);
+                    setCustomerInput("");
+                  }}
+                  className="text-red-600 hover:text-red-700"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
-
-        <button
-          onClick={() => {
-            setSelectedCustomer(null);
-            setCustomerInput("");
-          }}
-          className="text-red-600"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-    )}
-  </div>
-</Card>
+      </Card>
 
       <Alert variant="warning">
         <CheckCircle2 className="w-5 h-5 text-amber-600" />
         <AlertDescription className="text-sm">
           Product & customer data are taken from <strong>Admin Master</strong>.
+          Products with schemes will be highlighted in yellow in the final Excel.
         </AlertDescription>
       </Alert>
 
+      {/* ---------------- PRODUCT ROWS ---------------- */}
       <Card>
         <table className="min-w-full text-sm border">
           <thead className="bg-neutral-100">
             <tr>
               <th className="px-3 py-2 text-left">ITEMDESC</th>
+              <th className="px-3 py-2 text-center">Qty</th>
               <th className="px-3 py-2 text-center">Status</th>
-              <th />
+              <th className="px-3 py-2 text-center">Action</th>
             </tr>
           </thead>
 
@@ -265,15 +322,15 @@ if (parsedResult.customer?.name && !autoCustomerLocked.current) {
 
                     {/* AUTO MATCH */}
                     {row.matchedProduct && (
-                      <div className="text-xs text-green-700">
-                        → {row.matchedProduct.cleanedProductName}
+                      <div className="text-xs text-green-700 mt-1">
+                        ✓ {row.matchedProduct.cleanedProductName}
                         <span className="ml-1 opacity-60">
                           ({row.matchedProduct.division})
                         </span>
                       </div>
                     )}
 
-                    {/* MANUAL MAPPING */}
+                    {/* MANUAL MAPPING DROPDOWN */}
                     {!row.matchedProduct && (
                       <select
                         className="mt-1 w-full border rounded px-2 py-1 text-xs"
@@ -288,44 +345,38 @@ if (parsedResult.customer?.name && !autoCustomerLocked.current) {
                             next[i] = {
                               ...next[i],
                               manualProduct: selected,
+                              SAPCODE: selected?.productCode,
+                              DVN: selected?.division,
                               mappingSource: "MANUAL"
                             };
                             return next;
                           });
                         }}
                       >
-                        <option value="">
-                          ⚠ Select product from master
-                        </option>
+                        <option value="">⚠ Select product from master</option>
 
-  {allProducts
-  .filter(p => {
-    const text = row.ITEMDESC?.toUpperCase() || "";
+                        {allProducts
+                          .filter(p => {
+                            const text = row.ITEMDESC?.toUpperCase() || "";
+                            if (!p.baseName && !p.cleanedProductName) return false;
 
-    if (!p.baseName && !p.cleanedProductName) return false;
-
-    if (p.baseName && text.includes(p.baseName.toUpperCase())) {
-      return true;
-    }
-
-    if (
-      p.cleanedProductName &&
-      text.includes(p.cleanedProductName.toUpperCase())
-    ) {
-      return true;
-    }
-
-    return false;
-  })
-  .map(p => (
-    <option key={p._id} value={p._id}>
-      {p.cleanedProductName} ({p.division})
-    </option>
-))}
-
-
+                            return (
+                              (p.baseName && text.includes(p.baseName.toUpperCase())) ||
+                              (p.cleanedProductName && text.includes(p.cleanedProductName.toUpperCase()))
+                            );
+                          })
+                          .map(p => (
+                            <option key={p._id} value={p._id}>
+                              {p.cleanedProductName || p.productName} ({p.division})
+                            </option>
+                          ))
+                        }
                       </select>
                     )}
+                  </td>
+
+                  <td className="px-3 py-2 text-center font-medium">
+                    {row.ORDERQTY}
                   </td>
 
                   <td className="text-center">
@@ -339,9 +390,10 @@ if (parsedResult.customer?.name && !autoCustomerLocked.current) {
                   <td className="text-center">
                     <button
                       onClick={() => deleteRow(i)}
-                      className="text-red-600"
+                      className="text-red-600 hover:text-red-700"
+                      title="Remove row"
                     >
-                      🗑
+                      <X className="w-4 h-4" />
                     </button>
                   </td>
                 </tr>
@@ -351,11 +403,16 @@ if (parsedResult.customer?.name && !autoCustomerLocked.current) {
         </table>
       </Card>
 
+      {/* ---------------- ACTION BUTTONS ---------------- */}
       <div className="flex justify-end gap-3">
         <Button variant="secondary" onClick={() => navigate("/upload")}>
           Back
         </Button>
-        <Button onClick={handleConvert} isLoading={converting}>
+        <Button 
+          onClick={handleConvert} 
+          isLoading={converting}
+          disabled={!selectedCustomer}
+        >
           Confirm & Convert <ArrowRight className="ml-2 w-4 h-4" />
         </Button>
       </div>

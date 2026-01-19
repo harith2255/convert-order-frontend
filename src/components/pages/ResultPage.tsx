@@ -21,9 +21,16 @@ import { Badge } from "../Badge";
 import { getOrderResult, downloadOrderFile } from "../../services/orderApi";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { SchemeSummaryCard } from "../../components/SchemeSummary.tsx";
+import { SchemeSelectionModal } from "../../components/modals/SchemeModal.tsx";
 
 interface ConversionData {
   successRows: number;
+   schemeSummary?: {
+    count: number;
+    totalFreeQty: number;
+  };
+  schemeDetails?: any[];
   errors: Array<{
     rowNumber: number;
     field: string;
@@ -50,6 +57,8 @@ export function ResultPage() {
   const [downloading, setDownloading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [data, setData] = useState<ConversionData | null>(null);
+const [schemeModalOpen, setSchemeModalOpen] = useState(false);
+const [activeSchemeRow, setActiveSchemeRow] = useState<any>(null);
 
   useEffect(() => {
     if (!id) {
@@ -65,13 +74,16 @@ export function ResultPage() {
         const res = await getOrderResult(id);
         if (!mounted) return;
 
-        const conversionData: ConversionData = {
-          successRows: res.recordsProcessed || 0,
-          errors: Array.isArray(res.errors) ? res.errors : (res.rowErrors || []),
-          warnings: Array.isArray(res.warnings) ? res.warnings : (res.rowWarnings || []),
-          processingTime: res.processingTime || "-",
-          status: res.status || "UNKNOWN",
-        };
+   const conversionData: ConversionData = {
+  successRows: res.recordsProcessed || 0,
+  errors: Array.isArray(res.errors) ? res.errors : [],
+  warnings: Array.isArray(res.warnings) ? res.warnings : [],
+  processingTime: res.processingTime || "-",
+  status: res.status || "UNKNOWN",
+  schemeSummary: res.schemeSummary || null,
+  schemeDetails: res.schemeDetails || [] 
+};
+
 
         setData(conversionData);
     const isSuccess =
@@ -89,6 +101,7 @@ setSuccess(isSuccess);
 } else {
   toast.error("Conversion completed with errors");
 }
+console.log("ORDER RESULT RESPONSE:", res);
 
         
       } catch (err: any) {
@@ -265,6 +278,53 @@ setSuccess(isSuccess);
         </div>
       </Card>
 
+      {success && data.schemeSummary && data.schemeSummary.count > 0 && (
+  <SchemeSummaryCard
+    orderId={id!}
+    schemeSummary={data.schemeSummary}
+  />
+)}
+
+{success && data.schemeDetails && data.schemeDetails.length > 0 && (
+  <Card>
+    <div className="p-4">
+      <h3 className="font-semibold mb-3">Schemed Products</h3>
+
+      <div className="space-y-2">
+        {data.schemeDetails.map((row, i) => (
+          <div
+            key={i}
+            className="flex items-center justify-between p-3 border rounded hover:bg-yellow-50"
+          >
+            <div>
+              <p className="font-medium">{row.productName}</p>
+              <p className="text-sm text-neutral-600">
+                Qty: {row.orderQty} | Free: {row.freeQty}
+              </p>
+            </div>
+
+            <Button
+              variant="warning"
+              size="sm"
+              onClick={() => {
+                setActiveSchemeRow({
+                  SAPCODE: row.productCode,
+                  ITEMDESC: row.productName,
+                  ORDERQTY: row.orderQty,
+                  _availableSchemes: row.availableSchemes || [] // future-proof
+                });
+                setSchemeModalOpen(true);
+              }}
+            >
+              Apply / Change Scheme
+            </Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  </Card>
+)}
+
       {/* TEMPLATE INFO */}
       {success && (
         <Card>
@@ -352,6 +412,22 @@ setSuccess(isSuccess);
           </div>
         </div>
       </Card>
+      <SchemeSelectionModal
+  open={schemeModalOpen}
+  onClose={() => setSchemeModalOpen(false)}
+  product={{
+    sapCode: activeSchemeRow?.SAPCODE,
+    name: activeSchemeRow?.ITEMDESC,
+    orderedQty: activeSchemeRow?.ORDERQTY
+  }}
+  schemes={activeSchemeRow?._availableSchemes || []}
+  onApply={(scheme) => {
+    console.log("Selected scheme:", scheme);
+    // 👉 call backend /apply-scheme here
+    setSchemeModalOpen(false);
+  }}
+/>
+
     </div>
   );
 }
