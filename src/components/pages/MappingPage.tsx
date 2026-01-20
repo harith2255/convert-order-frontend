@@ -463,18 +463,32 @@ export function MappingPage() {
                         <option value="">⚠ Select product from master</option>
 
                         {allProducts
-                          .filter(p => {
-                            const text = (row.ITEMDESC || "").toUpperCase();
-                            if ((text.length < 2) && !row.manualProduct) return true;
+                         .filter(p => {
+  const rawText = (row.ITEMDESC || "").toUpperCase();
 
-                            if (!p.baseName && !p.cleanedProductName) return false;
+  if (!rawText || rawText.length < 2) return true;
 
-                            return (
-                              (p.baseName && text.includes(p.baseName.toUpperCase())) ||
-                              (p.cleanedProductName && text.includes(p.cleanedProductName.toUpperCase())) ||
-                              (p.productName && p.productName.toUpperCase().includes(text))
-                            );
-                          })
+  // Normalize BOTH sides
+  const normalize = (s: string) =>
+    s
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, " ") // remove / - etc
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const text = normalize(rawText);
+  const productName = normalize(p.productName || "");
+  const cleaned = normalize(p.cleanedProductName || "");
+  const base = normalize(p.baseName || "");
+
+  return (
+    (base && text.includes(base)) ||
+    (cleaned && text.includes(cleaned)) ||
+    (productName && productName.includes(text)) ||
+    (text.includes(productName))
+  );
+})
+
                           .slice(0, 50)
                           .map(p => (
                             <option key={p._id} value={p._id}>
