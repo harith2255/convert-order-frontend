@@ -14,10 +14,16 @@ interface TableProps {
 
 export function Table({ columns, data, onRowClick }: TableProps) {
   // ✅ FORCE data to be an array
-  const safeData = Array.isArray(data) ? data : [];
+  // ✅ HANDLE BOTH: [items] OR { success: true, data: [items] }
+  let safeData: any[] = [];
 
-  if (!Array.isArray(data)) {
-    console.error("❌ Table received non-array data:", data);
+  if (Array.isArray(data)) {
+    safeData = data;
+  } else if (data && typeof data === "object" && Array.isArray(data.data)) {
+    safeData = data.data; // automatic unwrap
+  } else {
+    // Only log error if data is truly invalid (not undefined/null)
+    if (data) console.error("❌ Table received non-array data:", data);
   }
 
   return (

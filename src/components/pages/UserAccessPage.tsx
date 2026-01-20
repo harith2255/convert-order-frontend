@@ -31,7 +31,7 @@ export function UserAccessPage() {
     try {
       setLoading(true);
       const res = await adminUsersApi.getUsers(search);
-      setUsers(res.data);
+      setUsers(res.data.data); // ✅ Extract array
     } catch {
       toast.error("Failed to load users");
     } finally {
@@ -60,7 +60,7 @@ export function UserAccessPage() {
 
       setUsers(prev =>
         prev.map(u =>
-          u._id === id ? { ...u, role: normalizedRole } : u
+          u.id === id ? { ...u, role: normalizedRole } : u // ✅ Match backend "id"
         )
       );
 
@@ -73,11 +73,11 @@ export function UserAccessPage() {
   /* ---------------- STATUS TOGGLE ---------------- */
   const confirmStatusChange = async () => {
     try {
-      await adminUsersApi.toggleStatus(confirmModal._id);
+      await adminUsersApi.toggleStatus(confirmModal.id); // ✅ Match backend "id"
 
       setUsers(prev =>
         prev.map(u =>
-          u._id === confirmModal._id
+          u.id === confirmModal.id // ✅ Match backend "id"
             ? {
                 ...u,
                 status: u.status === "Active" ? "Disabled" : "Active",
@@ -107,7 +107,7 @@ export function UserAccessPage() {
 
       const res = await adminUsersApi.addUser(payload);
 
-      setUsers(prev => [res.data, ...prev]);
+      setUsers(prev => [res.data.user, ...prev]); // ✅ Extract user object
       toast.success("User added");
 
       setIsAddModalOpen(false);
@@ -138,7 +138,7 @@ export function UserAccessPage() {
             { value: "admin", label: "Admin" },
           ]}
           value={value}
-          onChange={e => handleRoleChange(row._id, e.target.value)}
+          onChange={e => handleRoleChange(row.id, e.target.value)} // ✅ row.id
         />
       ),
     },
@@ -196,7 +196,7 @@ export function UserAccessPage() {
 
       {/* TABLE */}
       <Card padding="none">
-        <Table columns={columns} data={users} loading={loading} />
+        <Table columns={columns} data={users} />
       </Card>
 
       {/* ADD USER MODAL */}
