@@ -103,7 +103,7 @@ export function MappingPage() {
           city: parsedResult.customer.city,
           state: parsedResult.customer.state
         });
-        autoCustomerLocked.current = true;
+        autoCustomerLocked.current = false;
         toast.success(`Auto-selected: ${name}`);
       }
 
@@ -391,7 +391,6 @@ export function MappingPage() {
           <thead className="bg-neutral-100">
             <tr>
               <th className="px-3 py-2 text-left">ITEMDESC (Invoice)</th>
-              <th className="px-3 py-2 text-left">Mapped Product (Master)</th>
               <th className="px-3 py-2 text-center w-24">Qty</th>
               <th className="px-3 py-2 text-center w-24">Status</th>
               <th className="px-3 py-2 text-center w-16">Action</th>
@@ -405,100 +404,98 @@ export function MappingPage() {
               return (
                 <tr key={i} className={hasError ? "bg-red-50" : ""}>
                   <td className="px-3 py-2">
-                    <input 
-                        className="w-full border rounded px-2 py-1"
-                        value={row.ITEMDESC || ""}
-                        onChange={(e) => handleRowChange(i, "ITEMDESC", e.target.value)}
-                        placeholder="Item Description"
-                    />
+                 <div className="relative">
+  <input
+    className="w-full border rounded px-2 py-1"
+    value={row.ITEMDESC || ""}
+    onChange={(e) => {
+      handleRowChange(i, "ITEMDESC", e.target.value);
+      handleRowChange(i, "matchedProduct", null); // reset on typing
+    }}
+    placeholder="Type product name"
+  />
+
+  {/* AUTOCOMPLETE DROPDOWN */}
+  {row.ITEMDESC?.length >= 2 && !row.matchedProduct && (
+    <div className="absolute z-20 w-full bg-white border rounded shadow max-h-48 overflow-auto">
+      {allProducts
+        .filter(p => {
+          const normalize = (s = "") =>
+            s
+              .toUpperCase()
+              .replace(/MG|ML|MCG/g, "")
+              .replace(/[^A-Z0-9]/g, " ")
+              .replace(/\s+/g, " ")
+              .trim();
+
+          const inv = normalize(row.ITEMDESC);
+          const prod = normalize(p.productName);
+          const base = normalize(p.baseName || "");
+
+          if (!inv) return false;
+
+          // exact or prefix
+          if (prod.startsWith(inv)) return true;
+          if (base && inv.startsWith(base)) return true;
+
+          return false;
+        })
+        .slice(0, 10)
+        .map(p => (
+          <button
+            key={p._id}
+            type="button"
+            onClick={() => {
+              setRows(prev => {
+                const next = [...prev];
+                next[i] = {
+                  ...next[i],
+                  ITEMDESC: p.productName,
+                  matchedProduct: p,
+                  SAPCODE: p.productCode,
+                  DVN: p.division,
+                  mappingSource: "AUTO"
+                };
+                return next;
+              });
+            }}
+            className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b last:border-b-0"
+          >
+            <div className="font-medium">{p.productName}</div>
+            <div className="text-xs text-neutral-500">
+              {p.productCode} • {p.division}
+            </div>
+          </button>
+        ))}
+    </div>
+  )}
+
+  {/* SELECTED MASTER PRODUCT BADGE */}
+ {row.matchedProduct && (
+  <div className="text-xs text-green-700 font-medium mb-1 flex justify-between">
+    <span>
+      ✓ {row.ITEMDESC}
+      <span className="text-xs text-neutral-500 ml-2">
+        (mapped)
+      </span>
+    </span>
+
+    <button
+      className="text-blue-600 underline text-xs"
+      onClick={() => {
+        handleRowChange(i, "matchedProduct", null);
+      }}
+    >
+      Change
+    </button>
+  </div>
+)}
+
+</div>
+
                   </td>
 
-                  <td className="px-3 py-2">
-                    {/* AUTO MATCH DISPLAY */}
-                    {row.matchedProduct && (
-                      <div className="text-xs text-green-700 font-medium mb-1 flex justify-between">
-                      <span>
-  ✓ {row.matchedProduct.productName}
-  <span className="text-xs text-neutral-500 ml-1">
-    ({row.matchedProduct.division})
-  </span>
-</span>
-
-
-                        <button 
-                            className="text-blue-600 underline text-xs"
-                            onClick={() => {
-                                // Enable manual override
-                                handleRowChange(i, "matchedProduct", null);
-                            }}
-                        >
-                            Change
-                        </button>
-                      </div>
-                    )}
-
-                    {/* MANUAL MAPPING DROPDOWN */}
-                    {!row.matchedProduct && (
-                      <select
-                        className="w-full border rounded px-2 py-1 text-xs"
-                        value={row.manualProduct?._id || ""}
-                        onChange={e => {
-                          const selected = allProducts.find(
-                            p => p._id === e.target.value
-                          );
-
-                          setRows(prev => {
-                            const next = [...prev];
-                            next[i] = {
-                              ...next[i],
-                              manualProduct: selected,
-                              SAPCODE: selected?.productCode,
-                              DVN: selected?.division,
-                              mappingSource: "MANUAL"
-                            };
-                            return next;
-                          });
-                        }}
-                      >
-                        <option value="">⚠ Select product from master</option>
-
-                        {allProducts
-                         .filter(p => {
-  const rawText = (row.ITEMDESC || "").toUpperCase();
-
-  if (!rawText || rawText.length < 2) return true;
-
-  // Normalize BOTH sides
-  const normalize = (s: string) =>
-    s
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, " ") // remove / - etc
-      .replace(/\s+/g, " ")
-      .trim();
-
-  const text = normalize(rawText);
-  const productName = normalize(p.productName || "");
-  const cleaned = normalize(p.cleanedProductName || "");
-  const base = normalize(p.baseName || "");
-
-  return (
-    (base && text.includes(base)) ||
-    (cleaned && text.includes(cleaned)) ||
-    (productName && productName.includes(text)) ||
-    (text.includes(productName))
-  );
-})
-
-                          .slice(0, 50)
-                          .map(p => (
-                            <option key={p._id} value={p._id}>
-                              {p.cleanedProductName || p.productName} ({p.division})
-                            </option>
-                          ))
-                        }
-                      </select>
-                    )}
-                  </td>
+         
 
                   <td className="px-3 py-2 text-center font-medium">
                     <input 
