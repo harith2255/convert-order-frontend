@@ -30,6 +30,9 @@ interface DashboardStats {
   failedUploads: number;
   successRate: number;
   successfulConversions: number;
+  customers: number;
+  products: number;
+  schemes: number;
 }
 
 export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
@@ -57,6 +60,9 @@ const loadDashboard = async () => {
       failedUploads: res.data.uploads.failed,
       successRate: res.data.uploads.successRate,
       successfulConversions: res.data.uploads.completed,
+      customers: res.data.masterData?.customers || 0,
+      products: res.data.masterData?.products || 0,
+      schemes: res.data.masterData?.schemes || 0,
     });
 
     setRecentActivity(res.data.recentActivity || []);
@@ -114,6 +120,13 @@ const handleExport = async () => {
     setExporting(false);
   }
 };
+
+  // ✅ Load data on mount
+  useEffect(() => {
+    loadDashboard();
+    loadUploads(1);
+  }, []);
+
   useEffect(() => {
     const interval = setInterval(loadDashboard, 30000);
     return () => clearInterval(interval);
@@ -202,47 +215,14 @@ const activityColumns = [
 />
 
       </div>
-<Button
-  variant="secondary"
-  disabled={exporting}
-  onClick={async () => {
-    try {
-      setExporting(true);
 
-      const res = await api.get(
-        "/admin/export/conversions",
-        {
-          responseType: "blob", // ✅ THIS IS THE KEY
-        }
-      );
+      {/* Master Data Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <StatCard title="Total Customers" value={stats?.customers ?? 0} icon={Users} />
+        <StatCard title="Total Products" value={stats?.products ?? 0} icon={Database} />
+        <StatCard title="Total Schemes" value={stats?.schemes ?? 0} icon={Map} />
+      </div>
 
-      const blob = new Blob([res.data], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-
-      const url = window.URL.createObjectURL(blob);
-
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `converted_orders_${Date.now()}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-
-      a.remove();
-      window.URL.revokeObjectURL(url);
-
-      toast.success("Export completed");
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to export converted data");
-    } finally {
-      setExporting(false);
-    }
-  }}
->
-  <FileText className="w-4 h-4" />
-  {exporting ? "Exporting..." : "Export Converted Data"}
-</Button>
 
 
       {/* Alerts */}
@@ -286,13 +266,8 @@ const activityColumns = [
       </Card> */}
 
       {/* Quick Access */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div onClick={() => onNavigate("mapping-rules")} className="cursor-pointer">
-          <Card>
-            <Map className="w-6 h-6 text-primary-600" />
-            <p className="font-semibold mt-2">Mapping Rules</p>
-          </Card>
-        </div>
+     
+       
 {/* 
         <div onClick={() => onNavigate("master-data")} className="cursor-pointer">
           <Card>
@@ -301,13 +276,8 @@ const activityColumns = [
           </Card>
         </div> */}
 
-        <div onClick={() => onNavigate("user-access")} className="cursor-pointer">
-          <Card>
-            <Users className="w-6 h-6 text-warning-600" />
-            <p className="font-semibold mt-2">User Access</p>
-          </Card>
-        </div>
-      </div>
+       
+      
 
       {/* Activity */}
       {/* <Card>

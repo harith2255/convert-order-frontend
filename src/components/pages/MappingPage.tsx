@@ -10,7 +10,9 @@ import {
   User,
   X,
   RefreshCw,
-  AlertTriangle
+  AlertTriangle,
+  Zap,
+  Gift
 } from "lucide-react";
 import { Card } from "../Card";
 import { Button } from "../Button";
@@ -190,7 +192,16 @@ export function MappingPage() {
   /* ---------------- SCHEME CHECK LOGIC ---------------- */
   const checkForSchemes = async () => {
     try {
-        const res = await api.post("/orders/check-schemes", { dataRows: rows });
+        // Ensure strictly numeric types for backend
+        const cleanRows = rows.map(r => ({
+            ...r,
+            ORDERQTY: Number(r.ORDERQTY) || 0
+        }));
+
+        const res = await api.post("/orders/check-schemes", { 
+            dataRows: cleanRows,
+            customerCode: selectedCustomer?.customerCode 
+        });
         if (res.data?.suggestions?.length > 0) {
             setSchemeSuggestions(res.data.suggestions);
             setShowSchemeModal(true);
@@ -252,10 +263,20 @@ export function MappingPage() {
       setConverting(true);
       
       // ✅ PASS MODIFIED ROWS TO BACKEND
+      setConverting(true);
+      
+      // ✅ PASS MODIFIED ROWS TO BACKEND (Ensure numeric types)
+      const cleanRows = rows.map(r => ({
+          ...r,
+          ORDERQTY: Number(r.ORDERQTY) || 0,
+          // If manually mapped, ensure matchedProduct is fully populated or at least id present
+          matchedProduct: r.matchedProduct ? { ...r.matchedProduct } : null
+      }));
+
       const res = await api.post("/orders/convert", {
         uploadId,
         customerCode: selectedCustomer.customerCode,
-        dataRows: rows // Send state to backend
+        dataRows: cleanRows // Send state to backend
       });
 
       toast.success("Order quantities processed successfully");
@@ -454,8 +475,29 @@ export function MappingPage() {
                   matchedProduct: p,
                   SAPCODE: p.productCode,
                   DVN: p.division,
-                  mappingSource: "AUTO"
+                  mappingSource: "MANUAL",
+                  availableSchemes: [] // initialize
                 };
+                
+                // ⚡ FETCH SCHEMES FOR THIS PRODUCT
+                if (selectedCustomer?.customerCode) {
+                    api.get(`/orders/schemes/product/${p.productCode}`, {
+                        params: { 
+                            customerCode: selectedCustomer.customerCode,
+                            division: p.division 
+                        }
+                    }).then(res => {
+                        if (res.data?.schemes?.length > 0) {
+                             setRows(curr => {
+                                 const updated = [...curr];
+                                 updated[i] = { ...updated[i], availableSchemes: res.data.schemes };
+                                 return updated;
+                             });
+                             toast.success(`⚡ ${res.data.schemes.length} schemes found for ${p.productName}`);
+                        }
+                    });
+                }
+                
                 return next;
               });
             }}
@@ -489,6 +531,29 @@ export function MappingPage() {
       Change
     </button>
   </div>
+)}
+
+{/* ⚡ MANUAL SCHEME SELECTION UI */}
+{row.matchedProduct && row.availableSchemes?.length > 0 && (
+    <div className="mt-1 flex flex-wrap gap-2">
+        {row.availableSchemes.map((s: any, idx: number) => (
+            <button
+                key={idx}
+                type="button"
+                onClick={() => {
+                     handleRowChange(i, "ORDERQTY", s.minQty);
+                     toast.success(`Applied scheme: Buy ${s.minQty} get ${s.freeQty} free`);
+                }}
+                className="flex items-center gap-1 text-xs bg-amber-100 hover:bg-amber-200 text-amber-800 px-2 py-1 rounded border border-amber-200 transition-colors"
+                title={`Click to set quantity to ${s.minQty}`}
+            >
+                <Gift className="w-3 h-3" />
+                <span className="font-medium">
+                    {s.minQty} + {s.freeQty}
+                </span>
+            </button>
+        ))}
+    </div>
 )}
 
 </div>
