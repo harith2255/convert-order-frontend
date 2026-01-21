@@ -14,18 +14,20 @@ interface SchemeSummary {
 interface SchemeSummaryCardProps {
   orderId: string;
   schemeSummary: SchemeSummary;
+  fileName?: string;
 }
 
 export function SchemeSummaryCard({
   orderId,
-  schemeSummary
+  schemeSummary,
+  fileName
 }: SchemeSummaryCardProps) {
   const [downloading, setDownloading] = useState(false);
 
   const handleDownload = async () => {
     try {
       setDownloading(true);
-      await downloadSchemeFile(orderId);
+      await downloadSchemeFile(orderId, fileName);
       toast.success("Scheme summary downloaded successfully");
     } catch (err) {
       console.error("Scheme download error:", err);

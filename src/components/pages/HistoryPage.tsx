@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Download, Eye, RefreshCw } from 'lucide-react';
+import { Search, Download, Eye, RefreshCw, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../Card';
 import { Button } from '../Button';
@@ -11,6 +11,7 @@ import { CustomModal } from '../Modal';
 import api from '../../services/api';
 import { toast } from 'sonner';
 import { downloadOrderFile } from '../../services/orderApi';
+import { FileViewerModal } from '../modals/FileViewerModal';
 
 export function HistoryPage() {
   const navigate = useNavigate();
@@ -21,33 +22,74 @@ export function HistoryPage() {
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [viewingFile, setViewingFile] = useState<{id: string, fileName?: string} | null>(null);
+  
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState<any>(null);
 
+  // Debounced State
+  const [debouncedSearch, setDebouncedSearch] = useState(searchTerm);
+  const [debouncedStatus, setDebouncedStatus] = useState(statusFilter);
+  const [stats, setStats] = useState({
+    total: 0,
+    successful: 0,
+    failed: 0,
+    records: 0
+  });
+
+  // Debounce search/filter changes
   useEffect(() => {
-    const timer = setTimeout(fetchHistory, 400);
+    const timer = setTimeout(() => {
+      setPage(1);
+      setDebouncedSearch(searchTerm);
+      setDebouncedStatus(statusFilter);
+    }, 400);
     return () => clearTimeout(timer);
   }, [searchTerm, statusFilter]);
 
-const fetchHistory = async () => {
-  try {
-    const res = await api.get("/orders/history", {
-      params: {
-        search: searchTerm,
-        status: statusFilter === "all" ? "all" : statusFilter.toUpperCase(),
-      },
-    });
+  // Fetch when page or debounced params change
+  useEffect(() => {
+    fetchHistory();
+  }, [page, debouncedSearch, debouncedStatus]);
 
-    // ✅ HARD GUARANTEE: history is always an array
-    setHistory(Array.isArray(res.data?.history) ? res.data.history : []);
-  } catch (err) {
-    console.error("History fetch failed:", err);
-    toast.error("Failed to load history");
+  const fetchHistory = async () => {
+    try {
+      const res = await api.get("/orders/history", {
+        params: {
+          page,
+          limit: 20,
+          search: debouncedSearch,
+          status: debouncedStatus === "all" ? "all" : debouncedStatus.toUpperCase(),
+        },
+      });
 
-    // ✅ NEVER leave history undefined
-    setHistory([]);
-  } finally {
-    setLoading(false);
-  }
-};
+      // ✅ Correctly update history list
+      setHistory(Array.isArray(res.data?.history) ? res.data.history : []);
+      
+      // Update pagination meta
+      if (res.data?.pagination) {
+        setPagination(res.data.pagination);
+      }
+      
+      // ✅ Correctly update stats from backend global counts
+      if (res.data?.stats) {
+        setStats({
+            total: res.data.stats.total || 0,
+            successful: res.data.stats.successful || 0,
+            failed: res.data.stats.failed || 0,
+            records: res.data.stats.records || 0
+        });
+      }
+
+    } catch (err) {
+      console.error("History fetch failed:", err);
+      toast.error("Failed to load history");
+      setHistory([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
 
   const handleViewDetails = (row: any) => {
@@ -59,12 +101,12 @@ const fetchHistory = async () => {
     setIsModalOpen(true);
   };
 
-  const handleDownload = async (uploadId: string) => {
+  const handleDownload = async (uploadId: string, fileName?: string) => {
     if (!uploadId) return;
 
     try {
       setDownloading(uploadId);
-      await downloadOrderFile(uploadId);
+      await downloadOrderFile(uploadId, fileName);
       toast.success("File downloaded successfully");
     } catch (err: any) {
       console.error("Download error:", err);
@@ -94,7 +136,6 @@ const fetchHistory = async () => {
         const dateValue = value || row.uploadDate || row.createdAtText;
         if (!dateValue) return <span className="text-neutral-400">N/A</span>;
         
-        // If it's the pre-formatted text from backend, use it
         if (typeof dateValue === 'string' && dateValue.includes(',')) {
           return dateValue;
         }
@@ -130,7 +171,6 @@ const fetchHistory = async () => {
       key: 'recordsProcessed',
       label: 'Processed',
       render: (value: any, row: any) => {
-        // Handle common backend field variations
         const processed = typeof value === 'number' ? value : (row.processed ?? row.recordsProcessed ?? row.successCount ?? 0);
         const failed = typeof row.recordsFailed === 'number' ? row.recordsFailed : (row.failedCount ?? 0);
         const total = processed + failed;
@@ -162,22 +202,35 @@ const fetchHistory = async () => {
             <Eye className="w-4 h-4" />
           </Button>
           {row.status === "CONVERTED" && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDownload(row.id);
-              }}
-              disabled={downloading === row.id}
-              title="Download File"
-            >
-              {downloading === row.id ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
-              ) : (
-                <Download className="w-4 h-4" />
-              )}
-            </Button>
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setViewingFile({ id: row.id, fileName: row.fileName });
+                }}
+                title="View File"
+              >
+                <FileText className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDownload(row.id, row.fileName);
+                }}
+                disabled={downloading === row.id}
+                title="Download File"
+              >
+                {downloading === row.id ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+              </Button>
+            </>
           )}
         </div>
       )
@@ -227,31 +280,28 @@ const fetchHistory = async () => {
         </div>
       </Card>
 
-      {/* Summary Stats */}
+      {/* Summary Stats - NOW DYNAMIC */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card padding="sm">
           <p className="text-sm text-neutral-600 mb-1">Total Conversions</p>
-          <p className="text-2xl font-semibold text-neutral-900">{history.length}</p>
+          <p className="text-2xl font-semibold text-neutral-900">{stats.total}</p>
         </Card>
         <Card padding="sm">
           <p className="text-sm text-neutral-600 mb-1">Successful</p>
           <p className="text-2xl font-semibold text-success-600">
-            {history.filter(h => h.status === "CONVERTED").length}
+            {stats.successful}
           </p>
         </Card>
         <Card padding="sm">
           <p className="text-sm text-neutral-600 mb-1">Failed</p>
           <p className="text-2xl font-semibold text-error-600">
-            {history.filter(h => h.status === "FAILED").length}
+            {stats.failed}
           </p>
         </Card>
         <Card padding="sm">
           <p className="text-sm text-neutral-600 mb-1">Total Records</p>
           <p className="text-2xl font-semibold text-neutral-900">
-            {history.reduce((acc, h) => {
-              const processed = typeof h.processed === 'number' ? h.processed : (h.recordsProcessed ?? h.successCount ?? 0);
-              return acc + processed;
-            }, 0)}
+            {stats.records}
           </p>
         </Card>
       </div>
@@ -262,7 +312,7 @@ const fetchHistory = async () => {
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-neutral-900">Conversion History</h3>
             <div className="text-sm text-neutral-600">
-              {history.length} total conversion{history.length !== 1 ? 's' : ''}
+              {stats.total} total conversion{stats.total !== 1 ? 's' : ''}
             </div>
           </div>
         </div>
@@ -270,10 +320,29 @@ const fetchHistory = async () => {
           <>
             <Table columns={columns} data={history} />
             <div className="p-4 border-t border-neutral-200 bg-neutral-50">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                 <p className="text-sm text-neutral-600">
-                  Showing {history.length} conversion{history.length !== 1 ? 's' : ''}
+                  Showing {history.length} results (Page {page} of {pagination?.totalPages || 1})
                 </p>
+                
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={!pagination?.hasPrev}
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={!pagination?.hasNext}
+                    onClick={() => setPage(p => p + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
               </div>
             </div>
           </>
@@ -354,7 +423,7 @@ const fetchHistory = async () => {
               {selectedLog.status === "CONVERTED" && (
                 <Button
                   variant="primary"
-                  onClick={() => handleDownload(selectedLog.id)}
+                  onClick={() => handleDownload(selectedLog.id, selectedLog.fileName)}
                   disabled={downloading === selectedLog.id}
                   className="flex-1 inline-flex items-center justify-center gap-2"
                 >
@@ -375,6 +444,16 @@ const fetchHistory = async () => {
           </div>
         )}
       </CustomModal>
+
+      {/* File Viewer Modal */}
+      {viewingFile && (
+        <FileViewerModal
+          isOpen={!!viewingFile}
+          onClose={() => setViewingFile(null)}
+          orderId={viewingFile.id}
+          fileName={viewingFile.fileName}
+        />
+      )}
     </div>
   );
 }

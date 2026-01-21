@@ -5,7 +5,12 @@ export const getOrderResult = async (id: string) => {
   return data;
 };
 
-export const downloadOrderFile = async (id: string) => {
+// Helper to get clean filename base
+const getBaseName = (fileName: string) => {
+  return fileName?.split('.').slice(0, -1).join('.') || fileName || "file";
+};
+
+export const downloadOrderFile = async (id: string, originalFileName?: string) => {
   try {
     console.log("🔽 Downloading file for ID:", id);
 
@@ -26,10 +31,15 @@ export const downloadOrderFile = async (id: string) => {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
     
+    // Construct filename
+    const name = originalFileName 
+      ? `${getBaseName(originalFileName)}_converted.xlsx`
+      : `converted_order_${id}.xlsx`;
+
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "converted-orders.xlsx";
+    link.download = name;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -53,7 +63,7 @@ export const downloadOrderFile = async (id: string) => {
   }
 };
 
-export const downloadSchemeFile = async (id: string) => {
+export const downloadSchemeFile = async (id: string, originalFileName?: string) => {
   const res = await api.get(`/orders/${id}/scheme-file`, {
     responseType: "blob"
   });
@@ -64,10 +74,15 @@ export const downloadSchemeFile = async (id: string) => {
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   });
 
+  // Construct filename
+  const name = originalFileName 
+    ? `${getBaseName(originalFileName)}_scheme_summary.xlsx`
+    : `scheme-summary-${id}.xlsx`;
+
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `scheme-summary-${id}.xlsx`;
+  a.download = name;
   document.body.appendChild(a);
   a.click();
   a.remove();

@@ -47,6 +47,23 @@ export function MappingPage() {
   /* 🎁 SCHEME SUGGESTIONS STATE */
   const [schemeSuggestions, setSchemeSuggestions] = useState<any[]>([]);
   const [showSchemeModal, setShowSchemeModal] = useState(false);
+  
+  /* 📋 MULTI-SHEET ORGANIZATION STATE */
+  const [sheets, setSheets] = useState<{
+    id: string;
+    name: string;
+    color: { bg: string; border: string; text: string; badge: string };
+    productIndices: number[];
+  }[]>([]);
+  const [selectedRows, setSelectedRows] = useState<number[]>([]);
+  
+  const SHEET_COLORS = [
+    { bg: 'bg-blue-50', border: 'border-blue-300', text: 'text-blue-700', badge: 'bg-blue-100' },
+    { bg: 'bg-green-50', border: 'border-green-300', text: 'text-green-700', badge: 'bg-green-100' },
+    { bg: 'bg-purple-50', border: 'border-purple-300', text: 'text-purple-700', badge: 'bg-purple-100' },
+    { bg: 'bg-amber-50', border: 'border-amber-300', text: 'text-amber-700', badge: 'bg-amber-100' },
+    { bg: 'bg-pink-50', border: 'border-pink-300', text: 'text-pink-700', badge: 'bg-pink-100' },
+  ];
 
   // ... (useEffect load products - SAME)
   /* ---------------- LOAD MASTER PRODUCTS ---------------- */
@@ -187,6 +204,53 @@ export function MappingPage() {
       }
       return next;
     });
+  };
+
+  /* 📋 SHEET MANAGEMENT FUNCTIONS */
+  
+  // Get which sheet a product belongs to
+  const getProductSheet = (rowIndex: number) => {
+    return sheets.find(sheet => sheet.productIndices.includes(rowIndex));
+  };
+
+  // Toggle row selection
+  const toggleRowSelection = (rowIndex: number) => {
+    // Can't select if already in a sheet
+    if (getProductSheet(rowIndex)) return;
+    
+    setSelectedRows(prev => 
+      prev.includes(rowIndex)
+        ? prev.filter(i => i !== rowIndex)
+        : [...prev, rowIndex]
+    );
+  };
+
+  // Create new sheet with selected products
+  const createNewSheet = () => {
+    if (selectedRows.length === 0) {
+      toast.error("Please select products first");
+      return;
+    }
+
+    const sheetNumber = sheets.length + 1;
+    const colorIndex = (sheets.length) % SHEET_COLORS.length;
+    
+    const newSheet = {
+      id: `sheet-${Date.now()}`,
+      name: `Sheet ${sheetNumber}`,
+      color: SHEET_COLORS[colorIndex],
+      productIndices: [...selectedRows]
+    };
+
+    setSheets(prev => [...prev, newSheet]);
+    setSelectedRows([]); // Clear selection
+    toast.success(`Created ${newSheet.name} with ${selectedRows.length} products`);
+  };
+
+  //Remove sheet and free its products
+  const removeSheet = (sheetId: string) => {
+    setSheets(prev => prev.filter(s => s.id !== sheetId));
+    toast.success("Sheet removed");
   };
 
   /* ---------------- SCHEME CHECK LOGIC ---------------- */
@@ -406,15 +470,78 @@ export function MappingPage() {
         </AlertDescription>
       </Alert>
 
+      {/* 📋 SHEETS TOOLBAR */}
+      {rows.length > 0 && (
+        <Card>
+          <div className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-medium text-neutral-700">
+                {selectedRows.length > 0 ? (
+                  <>✓ {selectedRows.length} product{selectedRows.length > 1 ? 's' : ''} selected</>
+                ) : (
+                  <>Select products to organize into sheets</>
+                )}
+              </span>
+            </div>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={selectedRows.length === 0}
+              onClick={createNewSheet}
+              className="inline-flex items-center gap-2"
+            >
+              📋 Create Separate Sheet
+            </Button>
+          </div>
+
+          {/* Sheets Panel */}
+          {sheets.length > 0 && (
+            <div className="p-3 bg-neutral-50 border-b">
+              <p className="text-xs font-semibold text-neutral-600 mb-2">Created Sheets:</p>
+              <div className="flex flex-wrap gap-2">
+                {sheets.map(sheet => (
+                  <div
+                    key={sheet.id}
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border ${sheet.color.border} ${sheet.color.bg}`}
+                  >
+                    <span className={`text-sm font-medium ${sheet.color.text}`}>
+                      📋 {sheet.name}
+                    </span>
+                    <span className="text-xs text-neutral-600">
+                      ({sheet.productIndices.length} products)
+                    </span>
+                    <button
+                      onClick={() => removeSheet(sheet.id)}
+                      className={`ml-1 ${sheet.color.text} hover:opacity-70`}
+                      title="Remove sheet"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* ---------------- PRODUCT ROWS ---------------- */}
       <Card>
         <table className="min-w-full text-sm border">
           <thead className="bg-neutral-100">
             <tr>
               <th className="px-3 py-2 text-left">ITEMDESC (Invoice)</th>
-              <th className="px-3 py-2 text-center w-24">Qty</th>
-              <th className="px-3 py-2 text-center w-24">Status</th>
-              <th className="px-3 py-2 text-center w-16">Action</th>
+             
+              <th className="px-3 py-2 text-center">
+                Qty
+              </th>
+              <th className="px-3 py-2 text-center">
+                <div className="flex items-center justify-center gap-1">
+                  <span>📋 Sheet</span>
+                </div>
+              </th>
+              <th className="px-3 py-2 text-center">Status</th>
+              <th className="px-3 py-2 text-center">Del</th>
             </tr>
           </thead>
 
@@ -561,7 +688,6 @@ export function MappingPage() {
                   </td>
 
          
-
                   <td className="px-3 py-2 text-center font-medium">
                     <input 
                         type="number"
@@ -569,6 +695,33 @@ export function MappingPage() {
                         value={row.ORDERQTY || ""}
                         onChange={(e) => handleRowChange(i, "ORDERQTY", e.target.value)}
                     />
+                  </td>
+
+                  {/* SHEET ASSIGNMENT / SELECTION */}
+                  <td className="px-3 py-2 text-center">
+                    {(() => {
+                      const sheet = getProductSheet(i);
+                      if (sheet) {
+                        // Product is in a sheet - show badge
+                        return (
+                          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${sheet.color.badge} ${sheet.color.text}`}>
+                            📋 {sheet.name}
+                          </span>
+                        );
+                      } else {
+                        // Product not in sheet - show checkbox
+                        return (
+                          <label className="flex items-center justify-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={selectedRows.includes(i)}
+                              onChange={() => toggleRowSelection(i)}
+                              className="w-4 h-4 rounded border-neutral-300 text-blue-600 focus:ring-blue-500"
+                            />
+                          </label>
+                        );
+                      }
+                    })()}
                   </td>
 
                   <td className="text-center">
@@ -593,21 +746,30 @@ export function MappingPage() {
             })}
           </tbody>
         </table>
-      </Card>
 
-      {/* ---------------- ACTION BUTTONS ---------------- */}
-      <div className="flex justify-end gap-3">
-        <Button variant="secondary" onClick={() => navigate("/upload")}>
-          Back
-        </Button>
-        <Button 
+        {/* ACTIONS */}
+        <div className="p-4 bg-neutral-50 border-t">
+          <div className="flex justify-between items-center">
+            <Button
+              variant="secondary"
+              onClick={() => navigate(-1)}
+            >
+              ← Back
+            </Button>
+
+            <div className="flex gap-3">
+              <Button 
           onClick={() => handleConvert(false)} 
           isLoading={converting}
           disabled={!selectedCustomer}
         >
-          Confirm & Convert <ArrowRight className="ml-2 w-4 h-4" />
+          <ArrowRight className="w-4 h-4 mr-1" />
+          {converting ? "Converting..." : "Convert to Excel"}
         </Button>
-      </div>
+            </div>
+          </div>
+        </div>
+      </Card>
 
        {/* 🎁 SCHEME SUGGESTION MODAL */}
        {showSchemeModal && (

@@ -30,6 +30,7 @@ interface ConversionData {
     count: number;
     totalFreeQty: number;
   };
+  fileName?: string; // Add fileName field
   schemeDetails?: any[];
   errors: Array<{
     rowNumber: number;
@@ -81,6 +82,7 @@ const [activeSchemeRow, setActiveSchemeRow] = useState<any>(null);
   processingTime: res.processingTime || "-",
   status: res.status || "UNKNOWN",
   schemeSummary: res.schemeSummary || null,
+  fileName: res.fileName, // Capture filename
   schemeDetails: res.schemeDetails || [] 
 };
 
@@ -123,7 +125,8 @@ console.log("ORDER RESULT RESPONSE:", res);
 
     try {
       setDownloading(true);
-      await downloadOrderFile(id);
+      setDownloading(true);
+      await downloadOrderFile(id, data?.fileName); // Pass filename
       toast.success("File downloaded successfully");
     } catch (err: any) {
       console.error("Download error:", err);
@@ -282,6 +285,7 @@ console.log("ORDER RESULT RESPONSE:", res);
   <SchemeSummaryCard
     orderId={id!}
     schemeSummary={data.schemeSummary}
+    fileName={data.fileName} // Pass filename
   />
 )}
 
