@@ -174,14 +174,14 @@ const activityColumns = [
 
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 min-h-screen bg-white">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-neutral-900">
+          <h1 className="text-2xl sm:text-3xl font-bold text-neutral-900">
             Admin Dashboard
           </h1>
-          <p className="text-neutral-600 mt-1">
+          <p className="text-sm sm:text-base text-neutral-600 mt-1">
             System-wide overview and management
           </p>
         </div>
@@ -189,37 +189,38 @@ const activityColumns = [
       </div>
 
       {/* Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
         <StatCard title="Total Users" value={stats?.totalUsers ?? 0} icon={Users} />
-       <StatCard
-  title="Total Uploads"
-  value={stats?.totalUploads ?? 0}
-  icon={FileText}
-/>
-
-<StatCard
-  title="Failed Uploads"
-  value={stats?.failedUploads ?? 0}
-  icon={AlertTriangle}
-/>
-
-<StatCard
-  title="Success Rate"
-  value={`${stats?.successRate ?? 0}%`}
-  icon={TrendingUp}
-/>
-<StatCard
-  title="Successful Conversions"
-  value={stats?.successfulConversions ?? 0}
-  icon={CheckCircle}
-/>
-
+        <StatCard
+          title="Total Uploads"
+          value={stats?.totalUploads ?? 0}
+          icon={FileText}
+        />
+        <StatCard
+          title="Failed Uploads"
+          value={stats?.failedUploads ?? 0}
+          icon={AlertTriangle}
+        />
+        <StatCard
+          title="Success Rate"
+          value={`${stats?.successRate ?? 0}%`}
+          icon={TrendingUp}
+        />
       </div>
 
-      {/* Master Data Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Additional Metrics */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
+        <StatCard
+          title="Successful Conversions"
+          value={stats?.successfulConversions ?? 0}
+          icon={CheckCircle}
+        />
         <StatCard title="Total Customers" value={stats?.customers ?? 0} icon={Users} />
         <StatCard title="Total Products" value={stats?.products ?? 0} icon={Database} />
+      </div>
+
+      {/* Schemes */}
+      <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:gap-6">
         <StatCard title="Total Schemes" value={stats?.schemes ?? 0} icon={Map} />
       </div>
 
@@ -285,20 +286,27 @@ const activityColumns = [
         <Table columns={activityColumns} data={recentActivity} />
       </Card> */}
 <Card>
-  <h3 className="text-lg font-semibold mb-4">Recent Uploads</h3>
+  <h3 className="text-base sm:text-lg font-semibold mb-4">Recent Uploads</h3>
 
   {uploads.length === 0 ? (
     <p className="text-sm text-neutral-500">No uploads yet</p>
   ) : (
-    <Table columns={uploadColumns} data={uploads} />
+    <div className="overflow-x-auto -mx-4 sm:mx-0">
+      <div className="inline-block min-w-full align-middle">
+        <div className="overflow-hidden">
+          <Table columns={uploadColumns} data={uploads} />
+        </div>
+      </div>
+    </div>
   )}
 
-  <div className="flex justify-between items-center mt-4">
+  <div className="flex flex-col sm:flex-row justify-between items-center gap-3 mt-4">
     <Button
       size="sm"
       variant="secondary"
       disabled={!pagination?.hasPrev}
       onClick={() => loadUploads(page - 1)}
+      className="w-full sm:w-auto"
     >
       Previous
     </Button>
@@ -312,6 +320,7 @@ const activityColumns = [
       variant="secondary"
       disabled={!pagination?.hasNext}
       onClick={() => loadUploads(page + 1)}
+      className="w-full sm:w-auto"
     >
       Next
     </Button>

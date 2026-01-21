@@ -58,7 +58,7 @@ export default function App() {
         onMobileMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
       />
 
-      <div className="lg:ml-64 min-h-screen">
+      <div className="lg:ml-64 min-h-screen bg-neutral-50">
         {/* Mobile Header */}
         <div className="lg:hidden sticky top-0 z-20 bg-white border-b border-neutral-200 px-4 py-3">
           <div className="flex items-center justify-between">
