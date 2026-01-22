@@ -59,12 +59,10 @@ export function MappingPage() {
 
 const formatProductDisplay = (p: any) => {
   if (!p) return "";
-  return [p.baseName, p.variant, p.dosage]
-    .filter(Boolean)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return p.productName || 
+         [p.baseName, p.variant, p.dosage].filter(Boolean).join(" ");
 };
+
 
 
   const SHEET_COLORS = [

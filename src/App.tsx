@@ -16,6 +16,7 @@ import { MappingRulesPage } from "./components/pages/MappingRulesPage.tsx";
 import { UserAccessPage } from "./components/pages/UserAccessPage.tsx";
 import ProtectedRoute from "./components/ProtectedRoutes.tsx";
 import { MasterDataPage } from "./components/pages/MasterDataPage.tsx";
+import { EditOrdersPage } from "./components/pages/EditOrdersPage.tsx";
 
 import { useAuth } from "./context/AuthContext.tsx";
 
@@ -50,7 +51,7 @@ export default function App() {
      AUTHENTICATED LAYOUT
   ----------------------------- */
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="h-screen overflow-hidden bg-neutral-50">
       <Sidebar
         userRole={user.role}
         onLogout={logout}
@@ -58,7 +59,8 @@ export default function App() {
         onMobileMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
       />
 
-      <div className="lg:ml-64 min-h-screen bg-neutral-50">
+      {/* Main content area - scrollable */}
+      <div className="lg:ml-64 h-screen flex flex-col bg-neutral-50 overflow-hidden">
         {/* Mobile Header */}
         <div className="lg:hidden sticky top-0 z-20 bg-white border-b border-neutral-200 px-4 py-3">
           <div className="flex items-center justify-between">
@@ -75,7 +77,8 @@ export default function App() {
           </div>
         </div>
 
-        <div className="p-4 sm:p-6 lg:p-8">
+        {/* Page content - flex-1 with proper overflow */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <Routes>
             {/* USER ROUTES */}
             <Route
@@ -115,6 +118,15 @@ export default function App() {
     </ProtectedRoute>
   }
 />
+
+            <Route
+              path="/edit-orders/:id"
+              element={
+                <ProtectedRoute>
+                  <EditOrdersPage />
+                </ProtectedRoute>
+              }
+            />
 
             <Route
               path="/history"

@@ -8,13 +8,15 @@ interface ViewEditSchemeModalProps {
   onClose: () => void;
   uploadId: string;
   fileName?: string;
+  onSave?: (updatedData: any[]) => void; // Callback after successful save
 }
 
 export function ViewEditSchemeModal({
   isOpen,
   onClose,
   uploadId,
-  fileName
+  fileName,
+  onSave
 }: ViewEditSchemeModalProps) {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -26,6 +28,10 @@ export function ViewEditSchemeModal({
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const limit = 50;
+  
+  // 🔥 Store original scheme ratios for proportional recalculation
+  // Format: { [index]: { baseOrderQty, baseFreeQty } }
+  const [schemeRatios, setSchemeRatios] = useState<Record<number, { baseOrderQty: number; baseFreeQty: number }>>({});
 
   useEffect(() => {
     if (isOpen && uploadId) {
@@ -43,6 +49,18 @@ export function ViewEditSchemeModal({
         setData(response.data);
         setTotal(response.pagination?.total || response.data.length);
         setTotalPages(response.pagination?.totalPages || 1);
+        
+        // 🔥 Calculate base ratios for each scheme (for proportional scaling)
+        const ratios: Record<number, { baseOrderQty: number; baseFreeQty: number }> = {};
+        response.data.forEach((scheme: any, index: number) => {
+          if (scheme.orderQty > 0 && scheme.freeQty > 0) {
+            ratios[index] = {
+              baseOrderQty: scheme.orderQty,
+              baseFreeQty: scheme.freeQty
+            };
+          }
+        });
+        setSchemeRatios(ratios);
       }
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to load scheme data");
@@ -61,10 +79,32 @@ export function ViewEditSchemeModal({
       if (value !== '' && (isNaN(numValue) || numValue < 0)) {
         return; // Don't update if invalid
       }
+      
+      const finalValue = value === '' ? 0 : numValue;
       updatedData[index] = {
         ...updatedData[index],
-        [field]: value === '' ? 0 : numValue
+        [field]: finalValue
       };
+      
+      // 🔥 PROPORTIONAL SCHEME SCALING
+      // When orderQty changes, automatically recalculate freeQty
+      // Example: 100+20 base → 200 order → 40 free (multiplier = 2)
+      if (field === 'orderQty' && schemeRatios[index]) {
+        const { baseOrderQty, baseFreeQty } = schemeRatios[index];
+        
+        if (baseOrderQty > 0 && baseFreeQty > 0) {
+          // Calculate multiplier (how many times base order fits)
+          const multiplier = Math.floor(finalValue / baseOrderQty);
+          const newFreeQty = multiplier * baseFreeQty;
+          
+          updatedData[index].freeQty = newFreeQty;
+          
+          // Also update scheme percent
+          if (finalValue > 0) {
+            updatedData[index].schemePercent = Number(((newFreeQty / finalValue) * 100).toFixed(2));
+          }
+        }
+      }
     } else {
       updatedData[index] = {
         ...updatedData[index],
@@ -88,6 +128,11 @@ export function ViewEditSchemeModal({
         setSuccessMessage(`Saved successfully! ${response.data.schemesUpdated} schemes updated, Total Free Qty: ${response.data.totalFreeQty}`);
         setHasChanges(false);
         setTimeout(() => setSuccessMessage(null), 4000);
+        
+        // 🔥 Notify parent to refresh scheme data
+        if (onSave) {
+          onSave(data);
+        }
       }
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to save scheme data");
@@ -183,76 +228,64 @@ export function ViewEditSchemeModal({
 
           <div className="relative overflow-x-auto border rounded-lg">
 
-
             <table className="w-full text-sm">
               <thead className="bg-yellow-50 border-b border-neutral-200 sticky top-0">
                 <tr>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-700 uppercase">Product Code</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-700 uppercase">Product Name</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-700 uppercase">Order Qty</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-700 uppercase">Free Qty</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-700 uppercase">Scheme %</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-700 uppercase">Product</th>
+                  <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 uppercase">Base Scheme</th>
+                  <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 uppercase">Order Qty</th>
+                  <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 uppercase">Free Qty</th>
+                  <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 uppercase bg-green-50">Total (Order+Free)</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-700 uppercase">Division</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-neutral-200">
-                {data.map((scheme, index) => (
-                  <tr key={index} className="hover:bg-yellow-50/50">
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={scheme.productCode || ""}
-                        readOnly
-                        className="w-full px-2 py-1 bg-neutral-50 border border-neutral-200 rounded cursor-not-allowed"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={scheme.productName || ""}
-                        readOnly
-                        className="w-full px-2 py-1 bg-neutral-50 border border-neutral-200 rounded cursor-not-allowed"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="number"
-                        min="0"
-                        value={scheme.orderQty || 0}
-                        onChange={(e) => handleEdit(index, 'orderQty', e.target.value)}
-                        className="w-full px-2 py-1 border border-neutral-200 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="number"
-                        min="0"
-                        value={scheme.freeQty || 0}
-                        onChange={(e) => handleEdit(index, 'freeQty', e.target.value)}
-                        className="w-full px-2 py-1 border border-neutral-200 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.01"
-                        value={scheme.schemePercent || 0}
-                        onChange={(e) => handleEdit(index, 'schemePercent', e.target.value)}
-                        className="w-full px-2 py-1 border border-neutral-200 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={scheme.division || ""}
-                        readOnly
-                        className="w-full px-2 py-1 bg-neutral-50 border border-neutral-200 rounded cursor-not-allowed"
-                      />
-                    </td>
-                  </tr>
-                ))}
+                {data.map((scheme, index) => {
+                  const baseRatio = schemeRatios[index];
+                  const orderQty = scheme.orderQty || 0;
+                  const freeQty = scheme.freeQty || 0;
+                  
+                  return (
+                    <tr key={index} className="hover:bg-yellow-50/50">
+                      <td className="px-3 py-2">
+                        <p className="font-medium text-sm">{scheme.productName || '-'}</p>
+                        <p className="text-xs text-neutral-500">{scheme.productCode || '-'}</p>
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {baseRatio ? (
+                          <span className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
+                            {baseRatio.baseOrderQty}+{baseRatio.baseFreeQty}
+                          </span>
+                        ) : (
+                          <span className="text-neutral-400 text-xs">-</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="number"
+                          min="0"
+                          value={orderQty}
+                          onChange={(e) => handleEdit(index, 'orderQty', e.target.value)}
+                          className="w-20 px-2 py-1 text-center border border-neutral-200 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <span className="inline-flex items-center px-2 py-1 bg-green-100 text-green-700 font-medium rounded">
+                          +{freeQty}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-center bg-green-50">
+                        <span className="font-bold text-green-700 text-base">
+                          {orderQty}+{freeQty}
+                        </span>
+                        <p className="text-xs text-neutral-500">= {orderQty + freeQty} total</p>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className="text-xs text-neutral-600">{scheme.division || '-'}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

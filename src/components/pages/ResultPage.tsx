@@ -94,6 +94,19 @@ export function ResultPage() {
         const res = await getOrderResult(id);
         if (!mounted) return;
 
+        // 🔥 Check for cached scheme data from EditOrdersPage
+        let schemeDetails = res.schemeDetails || [];
+        const cachedSchemeData = sessionStorage.getItem(`schemeDetails_${id}`);
+        if (cachedSchemeData) {
+          try {
+            schemeDetails = JSON.parse(cachedSchemeData);
+            // Clear cache after reading
+            sessionStorage.removeItem(`schemeDetails_${id}`);
+          } catch (e) {
+            console.warn("Failed to parse cached scheme data");
+          }
+        }
+
         const conversionData: ConversionData = {
           successRows: res.recordsProcessed || 0,
           errors: Array.isArray(res.errors) ? res.errors : [],
@@ -102,7 +115,7 @@ export function ResultPage() {
           status: res.status || "UNKNOWN",
           schemeSummary: res.schemeSummary || null,
           fileName: res.fileName, 
-          schemeDetails: res.schemeDetails || [],
+          schemeDetails: schemeDetails,
           downloadUrls: res.downloadUrls || [] // Capture download URLs
         };
 
@@ -216,24 +229,6 @@ export function ResultPage() {
 
             {success && (
               <div className="flex gap-2 flex-wrap">
-                <Button
-                  variant="secondary"
-                  onClick={() => setEditingConverted(true)}
-                  className="inline-flex items-center gap-2"
-                >
-                  <Edit className="w-4 h-4" />
-                  Edit Orders
-                </Button>
-                {data.schemeSummary && data.schemeSummary.count > 0 && (
-                  <Button
-                    variant="secondary"
-                    onClick={() => setEditingScheme(true)}
-                    className="inline-flex items-center gap-2"
-                  >
-                    <Edit className="w-4 h-4" />
-                    Edit Schemes
-                  </Button>
-                )}
                 
                 {/* DYNAMIC DOWNLOAD BUTTONS */}
                 {data.downloadUrls && data.downloadUrls.length > 0 ? (
@@ -356,7 +351,7 @@ export function ResultPage() {
                     </div>
                     <div className="p-3 border-t border-gray-200 bg-gray-50 text-center">
                         <button 
-                            onClick={() => setEditingConverted(true)}
+                            onClick={() => navigate(`/edit-orders/${id}`)}
                             className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                         >
                             View Full File & Edit
@@ -368,61 +363,49 @@ export function ResultPage() {
 {success && data.schemeDetails && data.schemeDetails.length > 0 && (
   <Card>
     <div className="p-4">
-      <h3 className="font-semibold mb-3">Schemed Products</h3>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold flex items-center gap-2">
+          <span className="text-yellow-600">🎁</span>
+          Scheme Products ({data.schemeDetails.length})
+        </h3>
+        <span className="text-xs text-neutral-500">Auto-calculated from order quantities</span>
+      </div>
 
-      <div className="space-y-2">
-        {data.schemeDetails.map((row, i) => (
-          <div
-            key={i}
-            className="flex items-center justify-between p-3 border rounded hover:bg-yellow-50"
-          >
-            <div>
-              <p className="font-medium">{row.productName}</p>
-              <p className="text-sm text-neutral-600">
-                Qty: {row.orderQty} | Free: {row.freeQty}
-              </p>
-            </div>
-
-           <div className="flex gap-2">
-  {/* VIEW SCHEMES */}
-  <Button
-    variant="secondary"
-    size="sm"
-    onClick={() => {
-      setActiveSchemeRow({
-        SAPCODE: row.productCode,
-        ITEMDESC: row.productName,
-        ORDERQTY: row.orderQty,
-        _availableSchemes: row.availableSchemes || [],
-        viewOnly: true
-      });
-      setSchemeModalOpen(true);
-    }}
-  >
-    View Schemes
-  </Button>
-
-  {/* APPLY / CONVERT */}
-  <Button
-    variant="primary"
-    size="sm"
-    onClick={() => {
-      setActiveSchemeRow({
-        SAPCODE: row.productCode,
-        ITEMDESC: row.productName,
-        ORDERQTY: row.orderQty,
-        _availableSchemes: row.availableSchemes || [],
-        viewOnly: false
-      });
-      setSchemeModalOpen(true);
-    }}
-  >
-    Convert Order
-  </Button>
-</div>
-
-          </div>
-        ))}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-yellow-50 border-b">
+            <tr>
+              <th className="px-3 py-2 text-left font-medium text-neutral-700">Product</th>
+              <th className="px-3 py-2 text-center font-medium text-neutral-700">Order Qty</th>
+              <th className="px-3 py-2 text-center font-medium text-neutral-700">Free Qty</th>
+              <th className="px-3 py-2 text-center font-medium text-neutral-700 bg-green-50">Total (Order+Free)</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {data.schemeDetails.map((row, i) => {
+              const orderQty = row.orderQty || 0;
+              const freeQty = row.freeQty || 0;
+              return (
+                <tr key={i} className="hover:bg-yellow-50/50">
+                  <td className="px-3 py-2">
+                    <p className="font-medium">{row.productName}</p>
+                    <p className="text-xs text-neutral-500">{row.productCode}</p>
+                  </td>
+                  <td className="px-3 py-2 text-center">{orderQty}</td>
+                  <td className="px-3 py-2 text-center">
+                    <span className="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 font-medium rounded">
+                      +{freeQty}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-center bg-green-50">
+                    <span className="font-bold text-green-700">{orderQty}+{freeQty}</span>
+                    <p className="text-xs text-neutral-500">= {orderQty + freeQty} total</p>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   </Card>
@@ -548,6 +531,13 @@ export function ResultPage() {
           onClose={() => setEditingScheme(false)}
           uploadId={id}
           fileName={data?.fileName}
+          onSave={(updatedData) => {
+            // 🔥 Update scheme data in parent state to refresh the table
+            setData(prev => prev ? {
+              ...prev,
+              schemeDetails: updatedData
+            } : prev);
+          }}
         />
       )}
 

@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 interface ModalProps {
@@ -20,7 +21,7 @@ export function CustomModal({
 }: ModalProps) {
   useEffect(() => {
     if (isOpen) document.body.style.overflow = "hidden";
-    return () => (document.body.style.overflow = "unset");
+    return () => { document.body.style.overflow = "unset"; };
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -30,32 +31,33 @@ export function CustomModal({
     md: "max-w-lg",
     lg: "max-w-3xl",
     xl: "max-w-6xl",
-    full: "max-w-screen-xl",
+    full: "max-w-[95vw] lg:max-w-[calc(100vw-18rem)]",
   };
 
-  return (
+  // 🔥 Use Portal to render modal at document.body level
+  // This bypasses any CSS containment from parent elements
+  return createPortal(
     <>
-      {/* BACKDROP (ONLY THIS CLOSES MODAL) */}
+      {/* BACKDROP */}
       <div
-        className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+        className="fixed inset-0 z-[9998] bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* MODAL WRAPPER — NO onClick */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center px-2 sm:px-4 overflow-hidden">
-
+      {/* MODAL WRAPPER */}
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none">
         {/* MODAL */}
         <div
           onClick={(e) => e.stopPropagation()}
           className={`
-            relative bg-white rounded-2xl shadow-2xl w-full
+            relative bg-white rounded-2xl shadow-2xl w-full pointer-events-auto
             ${sizes[size]}
-            max-h-[90dvh]
+            max-h-[85vh]
             flex flex-col
           `}
         >
           {/* HEADER */}
-          <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b bg-white">
+          <div className="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b bg-white rounded-t-2xl">
             <h3 className="text-base sm:text-lg font-bold text-neutral-900">
               {title}
             </h3>
@@ -67,14 +69,14 @@ export function CustomModal({
             </button>
           </div>
 
-          {/* BODY (THIS SCROLLS) */}
-          <div className="flex-1 overflow-auto px-5 py-4">
+          {/* BODY (SCROLLABLE) */}
+          <div className="flex-1 overflow-y-auto overflow-x-auto px-5 py-4 min-h-0">
             {children}
           </div>
 
           {/* FOOTER */}
           {footer && (
-            <div className="sticky bottom-0 z-10 bg-white border-t px-5 py-4">
+            <div className="flex-shrink-0 bg-white border-t px-5 py-4 rounded-b-2xl">
               <div className="flex flex-col sm:flex-row sm:justify-end gap-2">
                 {footer}
               </div>
@@ -82,9 +84,11 @@ export function CustomModal({
           )}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 
 
 export { CustomModal as Modal };
+

@@ -143,14 +143,12 @@ export function ViewEditConvertedModal({
 
   return (
     <Modal
-  isOpen={isOpen}
-  onClose={handleClose}
-  title="View & Edit Converted Orders"
-  size="full" // 👈 instead of xl
-  className="max-w-screen-xl w-full mx-auto"
-  footer={footer}
->
-
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="View & Edit Converted Orders"
+      size="full"
+      footer={footer}
+    >
       {/* Messages */}
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2 text-red-700 text-sm">
@@ -182,10 +180,10 @@ export function ViewEditConvertedModal({
             {hasChanges && <span className="text-orange-600 font-medium">(Unsaved changes)</span>}
           </div>
 
-          <div className="relative overflow-x-auto border rounded-lg">
-
-
-          <table className="min-w-max w-full text-xs sm:text-sm">
+          {/* 🔥 FIXED: Add max-height and overflow-y for proper scrolling with sticky headers */}
+          <div className="relative border rounded-lg overflow-hidden">
+            <div className="max-h-[50vh] overflow-y-auto overflow-x-auto">
+              <table className="min-w-max w-full text-xs sm:text-sm">
 
               <thead className="bg-neutral-50 border-b border-neutral-200 sticky top-0">
                 <tr>
@@ -216,6 +214,7 @@ export function ViewEditConvertedModal({
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
 
           {/* Pagination */}
