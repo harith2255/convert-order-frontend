@@ -340,7 +340,11 @@ export function MappingPage() {
       const res = await api.post("/orders/convert", {
         uploadId,
         customerCode: selectedCustomer.customerCode,
-        dataRows: cleanRows // Send state to backend
+        dataRows: cleanRows, // Send state to backend
+        sheets: sheets.map(s => ({
+          name: s.name,
+          productIndices: s.productIndices
+        }))
       });
 
       toast.success("Order quantities processed successfully");
@@ -356,7 +360,7 @@ export function MappingPage() {
 
   /* ---------------- RENDER ---------------- */
   return (
-    <div className="max-w-5xl mx-auto p-6 space-y-6">
+    <div className="max-w-7xl mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Review Order Quantities</h1>
         <Button onClick={addRow} variant="secondary">
@@ -527,225 +531,282 @@ export function MappingPage() {
 
       {/* ---------------- PRODUCT ROWS ---------------- */}
       <Card>
-        <table className="min-w-full text-sm border">
-          <thead className="bg-neutral-100">
-            <tr>
-              <th className="px-3 py-2 text-left">ITEMDESC (Invoice)</th>
-             
-              <th className="px-3 py-2 text-center">
-                Qty
-              </th>
-              <th className="px-3 py-2 text-center">
-                <div className="flex items-center justify-center gap-1">
-                  <span>📋 Sheet</span>
-                </div>
-              </th>
-              <th className="px-3 py-2 text-center">Status</th>
-              <th className="px-3 py-2 text-center">Del</th>
-            </tr>
-          </thead>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead className="bg-neutral-100">
+              <tr>
+                <th className="px-4 py-3 text-left font-semibold text-neutral-700 border-b-2 border-neutral-200" style={{ minWidth: '280px' }}>
+                  ITEMDESC (Invoice)
+                </th>
+                <th className="px-4 py-3 text-center font-semibold text-neutral-700 border-b-2 border-neutral-200" style={{ minWidth: '120px' }}>
+                  Qty
+                </th>
+                <th className="px-4 py-3 text-center font-semibold text-neutral-700 border-b-2 border-neutral-200" style={{ minWidth: '100px' }}>
+                  Box Pack
+                </th>
+                <th className="px-4 py-3 text-center font-semibold text-neutral-700 border-b-2 border-neutral-200" style={{ minWidth: '100px' }}>
+                  Pack
+                </th>
+                <th className="px-4 py-3 text-center font-semibold text-neutral-700 border-b-2 border-neutral-200" style={{ minWidth: '100px' }}>
+                  Division
+                </th>
+                <th className="px-4 py-3 text-center font-semibold text-neutral-700 border-b-2 border-neutral-200" style={{ minWidth: '120px' }}>
+                  📋 Sheet
+                </th>
+                <th className="px-4 py-3 text-center font-semibold text-neutral-700 border-b-2 border-neutral-200" style={{ minWidth: '80px' }}>
+                  Status
+                </th>
+                <th className="px-4 py-3 text-center font-semibold text-neutral-700 border-b-2 border-neutral-200" style={{ minWidth: '60px' }}>
+                  Del
+                </th>
+              </tr>
+            </thead>
 
-          <tbody>
-            {rows.map((row, i) => {
-              const hasError = rowErrors[i]?.length > 0;
+            <tbody>
+              {rows.map((row, i) => {
+                const hasError = rowErrors[i]?.length > 0;
 
-              return (
-                <tr key={i} className={hasError ? "bg-red-50" : ""}>
-                  <td className="px-3 py-2">
-                 <div className="relative">
-  <input
-    className="w-full border rounded px-2 py-1"
-    value={row.ITEMDESC || ""}
-    onChange={(e) => {
-      handleRowChange(i, "ITEMDESC", e.target.value);
-      handleRowChange(i, "matchedProduct", null); // reset on typing
-    }}
-    placeholder="Type product name"
-  />
+                return (
+                  <tr key={i} className={`border-b border-neutral-100 ${hasError ? "bg-red-50" : "hover:bg-neutral-50"}`}>
+                    {/* PRODUCT NAME CELL */}
+                    <td className="px-4 py-3 align-top" style={{ minWidth: '280px' }}>
+                      <div className="space-y-2">
+                        {/* Input field */}
+                        {!row.matchedProduct && (
+                          <div className="relative">
+                            <input
+                              className="w-full border border-neutral-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              value={row.ITEMDESC || ""}
+                              onChange={(e) => {
+                                handleRowChange(i, "ITEMDESC", e.target.value);
+                                handleRowChange(i, "matchedProduct", null);
+                              }}
+                              placeholder="Type product name"
+                            />
 
-  {/* AUTOCOMPLETE DROPDOWN */}
-  {row.ITEMDESC?.length >= 2 && !row.matchedProduct && (
-    <div className="absolute z-20 w-full bg-white border rounded shadow max-h-48 overflow-auto">
-      {allProducts
-        .filter(p => {
-          const normalize = (s = "") =>
-            s
-              .toUpperCase()
-              .replace(/MG|ML|MCG/g, "")
-              .replace(/[^A-Z0-9]/g, " ")
-              .replace(/\s+/g, " ")
-              .trim();
+                            {/* AUTOCOMPLETE DROPDOWN */}
+                            {row.ITEMDESC?.length >= 2 && (
+                              <div className="absolute z-20 w-full mt-1 bg-white border border-neutral-300 rounded shadow-lg max-h-48 overflow-auto">
+                                {allProducts
+                                  .filter(p => {
+                                    const normalize = (s = "") =>
+                                      s
+                                        .toUpperCase()
+                                        .replace(/MG|ML|MCG/g, "")
+                                        .replace(/[^A-Z0-9]/g, " ")
+                                        .replace(/\s+/g, " ")
+                                        .trim();
 
-          const inv = normalize(row.ITEMDESC);
-          const prod = normalize(p.productName);
-          const base = normalize(p.baseName || "");
+                                    const inv = normalize(row.ITEMDESC);
+                                    const prod = normalize(p.productName);
+                                    const base = normalize(p.baseName || "");
 
-          if (!inv) return false;
+                                    if (!inv) return false;
+                                    if (prod.startsWith(inv)) return true;
+                                    if (base && inv.startsWith(base)) return true;
 
-          // exact or prefix
-          if (prod.startsWith(inv)) return true;
-          if (base && inv.startsWith(base)) return true;
+                                    return false;
+                                  })
+                                  .slice(0, 10)
+                                  .map(p => (
+                                    <button
+                                      key={p._id}
+                                      type="button"
+                                      onClick={() => {
+                                        setRows(prev => {
+                                          const next = [...prev];
+                                          next[i] = {
+                                            ...next[i],
+                                            ITEMDESC: p.productName,
+                                            matchedProduct: p,
+                                            SAPCODE: p.productCode,
+                                            DVN: p.division,
+                                            mappingSource: "MANUAL",
+                                            availableSchemes: []
+                                          };
+                                          
+                                          if (selectedCustomer?.customerCode) {
+                                            api.get(`/orders/schemes/product/${p.productCode}`, {
+                                              params: { 
+                                                customerCode: selectedCustomer.customerCode,
+                                                division: p.division 
+                                              }
+                                            }).then(res => {
+                                              if (res.data?.schemes?.length > 0) {
+                                                setRows(curr => {
+                                                  const updated = [...curr];
+                                                  updated[i] = { ...updated[i], availableSchemes: res.data.schemes };
+                                                  return updated;
+                                                });
+                                                toast.success(`⚡ ${res.data.schemes.length} schemes found for ${p.productName}`);
+                                              }
+                                            });
+                                          }
+                                          
+                                          return next;
+                                        });
+                                      }}
+                                      className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b last:border-b-0 transition-colors"
+                                    >
+                                      <div className="font-medium text-neutral-800">{p.productName}</div>
+                                      <div className="text-xs text-neutral-500">
+                                        {p.productCode} • {p.division}
+                                      </div>
+                                    </button>
+                                  ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
 
-          return false;
-        })
-        .slice(0, 10)
-        .map(p => (
-          <button
-            key={p._id}
-            type="button"
-            onClick={() => {
-              setRows(prev => {
-                const next = [...prev];
-                next[i] = {
-                  ...next[i],
-                  ITEMDESC: p.productName,
-                  matchedProduct: p,
-                  SAPCODE: p.productCode,
-                  DVN: p.division,
-                  mappingSource: "MANUAL",
-                  availableSchemes: [] // initialize
-                };
-                
-                // ⚡ FETCH SCHEMES FOR THIS PRODUCT
-                if (selectedCustomer?.customerCode) {
-                    api.get(`/orders/schemes/product/${p.productCode}`, {
-                        params: { 
-                            customerCode: selectedCustomer.customerCode,
-                            division: p.division 
-                        }
-                    }).then(res => {
-                        if (res.data?.schemes?.length > 0) {
-                             setRows(curr => {
-                                 const updated = [...curr];
-                                 updated[i] = { ...updated[i], availableSchemes: res.data.schemes };
-                                 return updated;
-                             });
-                             toast.success(`⚡ ${res.data.schemes.length} schemes found for ${p.productName}`);
-                        }
-                    });
-                }
-                
-                return next;
-              });
-            }}
-            className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b last:border-b-0"
-          >
-            <div className="font-medium">{p.productName}</div>
-            <div className="text-xs text-neutral-500">
-              {p.productCode} • {p.division}
-            </div>
-          </button>
-        ))}
-    </div>
-  )}
+                        {/* SELECTED PRODUCT DISPLAY */}
+                        {row.matchedProduct && (
+                          <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-green-600 flex-shrink-0">✓</span>
+                                  <span className="text-sm font-medium text-green-800 break-words">
+                                    {row.ITEMDESC}
+                                  </span>
+                                </div>
+                                <span className="text-xs text-green-600 ml-6">
+                                  (mapped)
+                                </span>
+                              </div>
+                              <button
+                                className="text-blue-600 hover:text-blue-700 text-xs font-medium underline whitespace-nowrap flex-shrink-0"
+                                onClick={() => {
+                                  handleRowChange(i, "matchedProduct", null);
+                                }}
+                              >
+                                Change
+                              </button>
+                            </div>
+                          </div>
+                        )}
 
-  {/* SELECTED MASTER PRODUCT BADGE */}
- {row.matchedProduct && (
-  <div className="text-xs text-green-700 font-medium mb-1 flex justify-between">
-    <span>
-      ✓ {row.ITEMDESC}
-      <span className="text-xs text-neutral-500 ml-2">
-        (mapped)
-      </span>
-    </span>
+                        {/* SCHEME BADGES */}
+                        {row.matchedProduct && row.availableSchemes?.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {row.availableSchemes.map((s: any, idx: number) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => {
+                                  handleRowChange(i, "ORDERQTY", s.minQty);
+                                  toast.success(`Applied scheme: Buy ${s.minQty} get ${s.freeQty} free`);
+                                }}
+                                className="flex items-center gap-1.5 text-xs bg-amber-100 hover:bg-amber-200 text-amber-800 px-2.5 py-1.5 rounded border border-amber-300 transition-colors"
+                                title={`Click to set quantity to ${s.minQty}`}
+                              >
+                                <Gift className="w-3 h-3" />
+                                <span className="font-medium">
+                                  {s.minQty} + {s.freeQty}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </td>
 
-    <button
-      className="text-blue-600 underline text-xs"
-      onClick={() => {
-        handleRowChange(i, "matchedProduct", null);
-      }}
-    >
-      Change
-    </button>
-  </div>
-)}
-
-{/* ⚡ MANUAL SCHEME SELECTION UI */}
-{row.matchedProduct && row.availableSchemes?.length > 0 && (
-    <div className="mt-1 flex flex-wrap gap-2">
-        {row.availableSchemes.map((s: any, idx: number) => (
-            <button
-                key={idx}
-                type="button"
-                onClick={() => {
-                     handleRowChange(i, "ORDERQTY", s.minQty);
-                     toast.success(`Applied scheme: Buy ${s.minQty} get ${s.freeQty} free`);
-                }}
-                className="flex items-center gap-1 text-xs bg-amber-100 hover:bg-amber-200 text-amber-800 px-2 py-1 rounded border border-amber-200 transition-colors"
-                title={`Click to set quantity to ${s.minQty}`}
-            >
-                <Gift className="w-3 h-3" />
-                <span className="font-medium">
-                    {s.minQty} + {s.freeQty}
-                </span>
-            </button>
-        ))}
-    </div>
-)}
-
-</div>
-
-                  </td>
-
-         
-                  <td className="px-3 py-2 text-center font-medium">
-                    <input 
+                    {/* QUANTITY COLUMN */}
+                    <td className="px-4 py-3 text-center align-top" style={{ minWidth: '120px' }}>
+                      <input 
                         type="number"
-                        className="w-full border rounded px-2 py-1 text-center"
+                        className="w-full max-w-[100px] mx-auto border border-neutral-300 rounded px-3 py-2 text-center font-semibold text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         value={row.ORDERQTY || ""}
                         onChange={(e) => handleRowChange(i, "ORDERQTY", e.target.value)}
-                    />
-                  </td>
+                        placeholder="0"
+                      />
+                    </td>
 
-                  {/* SHEET ASSIGNMENT / SELECTION */}
-                  <td className="px-3 py-2 text-center">
-                    {(() => {
-                      const sheet = getProductSheet(i);
-                      if (sheet) {
-                        // Product is in a sheet - show badge
-                        return (
-                          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${sheet.color.badge} ${sheet.color.text}`}>
-                            📋 {sheet.name}
-                          </span>
-                        );
-                      } else {
-                        // Product not in sheet - show checkbox
-                        return (
-                          <label className="flex items-center justify-center cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={selectedRows.includes(i)}
-                              onChange={() => toggleRowSelection(i)}
-                              className="w-4 h-4 rounded border-neutral-300 text-blue-600 focus:ring-blue-500"
-                            />
-                          </label>
-                        );
-                      }
-                    })()}
-                  </td>
+                    {/* BOX PACK COLUMN */}
+                    <td className="px-4 py-3 text-center align-top" style={{ minWidth: '100px' }}>
+                      <input
+                        type="number"
+                        min="0"
+                        className="w-full max-w-[80px] mx-auto border border-neutral-300 rounded px-2 py-2 text-center text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        value={row["BOX PACK"] || row.matchedProduct?.boxPack || 0}
+                        onChange={(e) => handleRowChange(i, "BOX PACK", e.target.value)}
+                        placeholder="0"
+                      />
+                    </td>
 
-                  <td className="text-center">
-                    {hasError ? (
-                      <Badge variant="warning">Invalid</Badge>
-                    ) : (
-                      <Badge variant="success">OK</Badge>
-                    )}
-                  </td>
+                    {/* PACK COLUMN */}
+                    <td className="px-4 py-3 text-center align-top" style={{ minWidth: '100px' }}>
+                      <input
+                        type="number"
+                        min="0"
+                        className="w-full max-w-[80px] mx-auto border border-neutral-300 rounded px-2 py-2 text-center text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        value={row.PACK || 0}
+                        onChange={(e) => handleRowChange(i, "PACK", e.target.value)}
+                        placeholder="0"
+                      />
+                    </td>
 
-                  <td className="text-center">
-                    <button
-                      onClick={() => deleteRow(i)}
-                      className="text-red-600 hover:text-red-700"
-                      title="Remove row"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    {/* DIVISION COLUMN */}
+                    <td className="px-4 py-3 text-center align-top" style={{ minWidth: '100px' }}>
+                      <input
+                        type="text"
+                        className="w-full max-w-[90px] mx-auto border border-neutral-300 rounded px-2 py-2 text-center text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        value={row.DVN || row.matchedProduct?.division || ""}
+                        onChange={(e) => handleRowChange(i, "DVN", e.target.value)}
+                        placeholder="DIV"
+                      />
+                    </td>
+
+                    {/* SHEET COLUMN */}
+                    <td className="px-4 py-3 text-center align-top" style={{ minWidth: '120px' }}>
+                      {(() => {
+                        const sheet = getProductSheet(i);
+                        if (sheet) {
+                          return (
+                            <span className={`inline-flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium ${sheet.color.badge} ${sheet.color.text}`}>
+                              📋 {sheet.name}
+                            </span>
+                          );
+                        } else {
+                          return (
+                            <label className="flex items-center justify-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={selectedRows.includes(i)}
+                                onChange={() => toggleRowSelection(i)}
+                                className="w-4 h-4 rounded border-neutral-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                              />
+                            </label>
+                          );
+                        }
+                      })()}
+                    </td>
+
+                    {/* STATUS COLUMN */}
+                    <td className="px-4 py-3 text-center align-top" style={{ minWidth: '80px' }}>
+                      {hasError ? (
+                        <Badge variant="warning">Invalid</Badge>
+                      ) : (
+                        <Badge variant="success">OK</Badge>
+                      )}
+                    </td>
+
+                    {/* DELETE COLUMN */}
+                    <td className="px-4 py-3 text-center align-top" style={{ minWidth: '60px' }}>
+                      <button
+                        onClick={() => deleteRow(i)}
+                        className="text-red-600 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors"
+                        title="Remove row"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
         {/* ACTIONS */}
         <div className="p-4 bg-neutral-50 border-t">

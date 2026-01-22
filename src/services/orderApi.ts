@@ -10,11 +10,15 @@ const getBaseName = (fileName: string) => {
   return fileName?.split('.').slice(0, -1).join('.') || fileName || "file";
 };
 
-export const downloadOrderFile = async (id: string, originalFileName?: string) => {
+export const downloadOrderFile = async (id: string, originalFileName?: string, type?: 'sheets' | 'main') => {
   try {
-    console.log("🔽 Downloading file for ID:", id);
+    console.log(`🔽 Downloading file for ID: ${id} ${type ? `(Type: ${type})` : ''}`);
 
-    const res = await api.get(`/orders/download/${id}`, {
+    const endpoint = type 
+      ? `/orders/download/${id}/${type}` 
+      : `/orders/download/${id}`;
+
+    const res = await api.get(endpoint, {
       responseType: "blob",
     });
 
@@ -88,3 +92,32 @@ export const downloadSchemeFile = async (id: string, originalFileName?: string) 
   a.remove();
   window.URL.revokeObjectURL(url);
 };
+
+// Preview converted orders
+export const previewConvertedOrders = async (id: string, page = 1, limit = 50) => {
+  const { data } = await api.get(`/orders/preview/${id}`, {
+    params: { page, limit }
+  });
+  return data;
+};
+
+// Preview scheme data
+export const previewSchemeData = async (id: string, page = 1, limit = 50) => {
+  const { data } = await api.get(`/orders/preview-scheme/${id}`, {
+    params: { page, limit }
+  });
+  return data;
+};
+
+// Update converted order data
+export const updateConvertedData = async (id: string, rows: any[]) => {
+  const { data } = await api.put(`/orders/converted-data/${id}`, { rows });
+  return data;
+};
+
+// Update scheme data
+export const updateSchemeData = async (id: string, schemeDetails: any[]) => {
+  const { data } = await api.put(`/orders/scheme-data/${id}`, { schemeDetails });
+  return data;
+};
+

@@ -75,7 +75,7 @@ export function CustomModal({
 
           {/* FOOTER (STICKY) */}
           {footer && (
-            <div className="sticky bottom-0 z-10 flex justify-end gap-3 px-5 py-4 border-t bg-white">
+            <div className="sticky bottom-0 z-10 flex flex-wrap justify-end gap-3 px-5 py-4 border-t bg-white">
               {footer}
             </div>
           )}

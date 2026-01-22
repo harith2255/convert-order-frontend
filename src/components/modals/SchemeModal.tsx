@@ -150,6 +150,12 @@ export function SchemeSelectionModal({
             const qualifies = totalQty >= scheme.minQty;
             const scaledFree = calculateScaledFree(scheme, totalQty);
             const multiplier = Math.floor(totalQty / scheme.minQty);
+            
+            // 💡 Scaling Upsell Calculation
+            const nextTierQty = (multiplier + 1) * scheme.minQty;
+            const diffToNext = nextTierQty - totalQty;
+            const threshold = scheme.minQty * 0.6; // Suggest if within 60% range
+            const showUpsell = diffToNext <= threshold;
 
             return (
               <label
@@ -181,20 +187,45 @@ export function SchemeSelectionModal({
                   </p>
 
                   {qualifies && scaledFree > 0 && (
-                    <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
-                      <p className="text-sm font-semibold text-green-800">
-                        🎁 Your Benefit: {multiplier} × {scheme.freeQty} = <span className="text-lg">{scaledFree} FREE</span>
-                      </p>
-                      <p className="text-xs text-green-700 mt-1">
-                        (Based on {totalQty} total quantity)
-                      </p>
+                    <div className="mt-2 text-sm">
+                      <div className="p-2 bg-green-50 border border-green-200 rounded mb-2">
+                        <p className="font-semibold text-green-800">
+                           🎁 Your Benefit: {multiplier} × {scheme.freeQty} = <span className="text-lg">{scaledFree} FREE</span>
+                        </p>
+                         <p className="text-xs text-green-700 mt-1">
+                          (Based on {totalQty} total quantity)
+                        </p>
+                      </div>
+
+                      {/* 💡 NEXT TIER UPSELL */}
+                      {showUpsell && (
+                         <div className="flex items-start gap-2 p-2 bg-blue-50 border border-blue-200 rounded text-blue-800 animate-pulse">
+                            <span className="text-lg">💡</span>
+                            <div>
+                                <p className="font-semibold text-sm">
+                                    Add <span className="font-bold">{diffToNext}</span> more to get +{scheme.freeQty} extra free!
+                                </p>
+                                <p className="text-xs opacity-80">
+                                    Reach {nextTierQty} to qualify for next tier.
+                                </p>
+                            </div>
+                         </div>
+                      )}
                     </div>
                   )}
 
                   {!qualifies && (
-                    <p className="text-xs text-red-600 mt-1">
-                      Need {scheme.minQty - totalQty} more to qualify
-                    </p>
+                    <div className="mt-1">
+                        <p className="text-xs text-red-600 font-medium">
+                        Need {scheme.minQty - totalQty} more to qualify
+                        </p>
+                         {/* Show "Close!" message if very close to first tier */}
+                         {totalQty > 0 && (scheme.minQty - totalQty) <= (scheme.minQty * 0.5) && (
+                             <p className="text-xs text-blue-600 mt-1">
+                                 💡 You are close! Add {scheme.minQty - totalQty} more.
+                             </p>
+                         )}
+                    </div>
                   )}
                 </div>
 
@@ -219,7 +250,8 @@ export function SchemeSelectionModal({
           </Button>
 
           <Button
-            variant="warning"
+            variant="primary"
+            className="bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500 border-transparent text-white"
             disabled={!selected || totalQty < (selected?.minQty || 0)}
             onClick={handleApply}
           >

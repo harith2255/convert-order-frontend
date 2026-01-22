@@ -12,17 +12,20 @@ import {
   FileSpreadsheet,
   AlertCircle,
   CheckCircle2,
+  Edit,
 } from "lucide-react";
 import { Alert } from "../ui/alert";
 import { Card } from "../Card";
 import { Button } from "../Button";
 import { Table } from "../Table";
 import { Badge } from "../Badge";
-import { getOrderResult, downloadOrderFile } from "../../services/orderApi";
+import { getOrderResult, downloadOrderFile, previewConvertedOrders } from "../../services/orderApi";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { SchemeSummaryCard } from "../../components/SchemeSummary.tsx";
 import { SchemeSelectionModal } from "../../components/modals/SchemeModal.tsx";
+import { ViewEditConvertedModal } from "../modals/ViewEditConvertedModal";
+import { ViewEditSchemeModal } from "../modals/ViewEditSchemeModal";
 
 interface ConversionData {
   successRows: number;
@@ -47,6 +50,7 @@ interface ConversionData {
     newValue?: string | number;
   }>;
   processingTime: string | number;
+  downloadUrls?: Array<{ type: string; url: string }>;
   status: string;
 }
 
@@ -55,11 +59,26 @@ export function ResultPage() {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
-  const [downloading, setDownloading] = useState(false);
+  const [downloadingType, setDownloadingType] = useState<string | null>(null); // Track which button is downloading
   const [success, setSuccess] = useState(false);
   const [data, setData] = useState<ConversionData | null>(null);
-const [schemeModalOpen, setSchemeModalOpen] = useState(false);
-const [activeSchemeRow, setActiveSchemeRow] = useState<any>(null);
+  const [schemeModalOpen, setSchemeModalOpen] = useState(false);
+  const [activeSchemeRow, setActiveSchemeRow] = useState<any>(null);
+  const [editingConverted, setEditingConverted] = useState(false);
+  const [editingScheme, setEditingScheme] = useState(false);
+  const [previewData, setPreviewData] = useState<any[]>([]);
+  const [previewHeaders, setPreviewHeaders] = useState<string[]>([]);
+
+  useEffect(() => {
+     if (success && id) {
+        previewConvertedOrders(id, 1, 10).then(res => {
+            if (res.success) {
+                setPreviewData(res.data || []);
+                setPreviewHeaders(res.headers || Object.keys(res.data?.[0] || {}));
+            }
+        }).catch(err => console.error("Preview fetch error", err));
+     }
+  }, [success, id]);
 
   useEffect(() => {
     if (!id) {
@@ -75,37 +94,31 @@ const [activeSchemeRow, setActiveSchemeRow] = useState<any>(null);
         const res = await getOrderResult(id);
         if (!mounted) return;
 
-   const conversionData: ConversionData = {
-  successRows: res.recordsProcessed || 0,
-  errors: Array.isArray(res.errors) ? res.errors : [],
-  warnings: Array.isArray(res.warnings) ? res.warnings : [],
-  processingTime: res.processingTime || "-",
-  status: res.status || "UNKNOWN",
-  schemeSummary: res.schemeSummary || null,
-  fileName: res.fileName, // Capture filename
-  schemeDetails: res.schemeDetails || [] 
-};
-
+        const conversionData: ConversionData = {
+          successRows: res.recordsProcessed || 0,
+          errors: Array.isArray(res.errors) ? res.errors : [],
+          warnings: Array.isArray(res.warnings) ? res.warnings : [],
+          processingTime: res.processingTime || "-",
+          status: res.status || "UNKNOWN",
+          schemeSummary: res.schemeSummary || null,
+          fileName: res.fileName, 
+          schemeDetails: res.schemeDetails || [],
+          downloadUrls: res.downloadUrls || [] // Capture download URLs
+        };
 
         setData(conversionData);
-    const isSuccess =
-  res.status === "CONVERTED" ||
-  (
-    (res.recordsProcessed || 0) > 0 &&
-    (!res.errors || res.errors.length === 0)
-  );
+        // ... rest of effect
+        const isSuccess =
+          res.status === "CONVERTED" ||
+          ((res.recordsProcessed || 0) > 0 && (!res.errors || res.errors.length === 0));
 
-setSuccess(isSuccess);
+        setSuccess(isSuccess);
 
-        // Show toast based on result
-       if (isSuccess) {
-  toast.success(`✅ ${conversionData.successRows} records converted successfully`);
-} else {
-  toast.error("Conversion completed with errors");
-}
-console.log("ORDER RESULT RESPONSE:", res);
-
-        
+        if (isSuccess) {
+          toast.success(`✅ ${conversionData.successRows} records converted successfully`);
+        } else {
+          toast.error("Conversion completed with errors");
+        }
       } catch (err: any) {
         console.error("Result fetch error:", err);
         toast.error("Failed to load conversion result");
@@ -120,156 +133,154 @@ console.log("ORDER RESULT RESPONSE:", res);
     };
   }, [id, navigate]);
 
-  const handleDownload = async () => {
+  const handleDownload = async (type: string = 'single') => {
     if (!id) return;
 
     try {
-      setDownloading(true);
-      setDownloading(true);
-      await downloadOrderFile(id, data?.fileName); // Pass filename
-      toast.success("File downloaded successfully");
+      setDownloadingType(type);
+      // Map 'single', 'sheets', 'main' to API types if needed, currently they match
+      const apiType = (type === 'sheets' || type === 'main') ? type as 'sheets' | 'main' : undefined;
+      
+      const prefix = type === 'sheets' ? 'Sheet Orders' : type === 'main' ? 'Main Order' : '';
+      const name = prefix ? `${prefix} - ${data?.fileName}` : data?.fileName;
+
+      await downloadOrderFile(id, name, apiType);
+      toast.success(`${type === 'sheets' ? 'Sheet Orders' : type === 'main' ? 'Main Order' : 'File'} downloaded successfully`);
     } catch (err: any) {
       console.error("Download error:", err);
       toast.error("Failed to download file");
     } finally {
-      setDownloading(false);
+      setDownloadingType(null);
     }
   };
-
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="w-8 h-8 text-primary-600 animate-spin mx-auto mb-2" />
-          <p className="text-neutral-600">Loading conversion result...</p>
+        <div className="min-h-screen flex items-center justify-center">
+            <RefreshCw className="w-8 h-8 animate-spin text-blue-600" />
         </div>
-      </div>
     );
   }
 
   if (!data) return null;
 
-  const errorRows = data.errors;
-  const warningRows = data.warnings;
-  const hasIssues = errorRows.length > 0 || warningRows.length > 0;
+  const warningRows = data.warnings || [];
+  const errorRows = data.errors || [];
+
+  const warningColumns = [
+    { key: "rowNumber", label: "Row" },
+    { key: "field", label: "Field" },
+    { key: "warning", label: "Issue" },
+    { key: "originalValue", label: "Original" },
+    { key: "newValue", label: "New Value" },
+  ];
 
   const errorColumns = [
-    { key: "rowNumber", label: "Row #" },
+    { key: "rowNumber", label: "Row" },
     { key: "field", label: "Field" },
-    { key: "error", label: "Error Description" },
-    { key: "originalValue", label: "Original Value" },
+    { key: "error", label: "Error" },
     { key: "suggestedFix", label: "Suggestion" },
   ];
 
-  const warningColumns = [
-    { key: "rowNumber", label: "Row #" },
-    { key: "field", label: "Field" },
-    { key: "warning", label: "Warning" },
-    { key: "originalValue", label: "Original" },
-    { key: "newValue", label: "Corrected To" },
-  ];
-
   return (
-    <div className="space-y-6 max-w-6xl mx-auto p-6">
-      {/* HEADER */}
-      <div>
-        <h1 className="text-3xl font-bold text-neutral-900">
-          Conversion Result
-        </h1>
-        <p className="text-neutral-600 mt-1">
-          {success 
-            ? "Your file has been converted to the pharmaceutical training template" 
-            : "Review issues and retry conversion"}
-        </p>
+    <div className="container mx-auto px-4 py-8 max-w-6xl space-y-6">
+      <div className="flex items-center gap-3 mb-6">
+           <Button variant="ghost" onClick={() => navigate("/upload")}>Back</Button>
+           <h1 className="text-2xl font-bold text-neutral-800">Conversion Results</h1>
       </div>
 
-      {/* ALERT BANNER */}
-      {success ? (
-        <Alert variant="success" className="animate-in fade-in slide-in-from-top-4 duration-500">
-          <CheckCircle2 className="w-6 h-6" />
-          <span>Order quantities processed successfully</span>
-        </Alert>
-      ) : (
-        <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-4 duration-500">
-          <AlertCircle className="w-6 h-6" />
-          <span>Conversion completed with errors</span>
-        </Alert>
-      )}
-
-      {/* STATUS CARD */}
       <Card>
-        <div
-          className={`flex items-start gap-4 p-6 rounded-lg border-2 ${
-            success && !hasIssues
-              ? "bg-green-50 border-green-300"
-              : success && hasIssues
-              ? "bg-yellow-50 border-yellow-300"
-              : "bg-red-50 border-red-300"
-          }`}
-        >
-          {success ? (
-            <CheckCircle className="w-12 h-12 text-green-600 flex-shrink-0" />
-          ) : (
-            <XCircle className="w-12 h-12 text-red-600 flex-shrink-0" />
-          )}
+        <div className="p-6 flex items-start justify-between">
+           <div className="flex items-center gap-4">
+               {success ? (
+                  <div className="bg-green-100 p-3 rounded-full">
+                     <CheckCircle2 className="w-8 h-8 text-green-600" />
+                  </div>
+               ) : (
+                  <div className="bg-red-100 p-3 rounded-full">
+                     <XCircle className="w-8 h-8 text-red-600" />
+                  </div>
+               )}
+               <div>
+                  <h2 className="text-xl font-bold">
+                     {success ? "Conversion Successful" : "Conversion Failed"}
+                  </h2>
+                  <div className="flex gap-4 mt-1 text-sm text-neutral-600">
+                      <span>Processed: <strong>{data.successRows + errorRows.length}</strong> rows</span>
+                      <span className="flex items-center gap-1"><RefreshCw className="w-3 h-3"/> {data.processingTime}</span>
+                  </div>
+               </div>
+           </div>
 
-          <div className="flex-1">
-            <h2 className="text-2xl font-semibold mb-2">
-              {success
-                ? hasIssues
-                  ? "Conversion Completed with Warnings"
-                  : "Conversion Successful"
-                : "Conversion Failed"}
-            </h2>
+           <div className="flex flex-col items-end gap-4">
 
-            <p className="text-neutral-700 mb-4">
-              {success
-                ? `Successfully converted ${data.successRows} product records to template format`
-                : `${errorRows.length} errors prevented conversion`}
-            </p>
-
-            <div className="flex flex-wrap gap-2 mb-4">
-              <Badge variant="success">
-                {data.successRows} records
-              </Badge>
-              {warningRows.length > 0 && (
-                <Badge variant="warning">
-                  {warningRows.length} warnings
-                </Badge>
-              )}
-              {errorRows.length > 0 && (
-                <Badge variant="error">
-                  {errorRows.length} errors
-                </Badge>
-              )}
-              {data.processingTime && data.processingTime !== "-" && (
-                <Badge variant="neutral">
-                  {typeof data.processingTime === 'number' 
-                    ? `${(data.processingTime / 1000).toFixed(2)}s`
-                    : data.processingTime}
-                </Badge>
-              )}
-            </div>
 
             {success && (
-              <Button
-                variant="primary"
-                onClick={handleDownload}
-                disabled={downloading}
-                className="inline-flex items-center gap-2"
-              >
-                {downloading ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    Downloading...
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4" />
-                    Download Excel File
-                  </>
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  variant="secondary"
+                  onClick={() => setEditingConverted(true)}
+                  className="inline-flex items-center gap-2"
+                >
+                  <Edit className="w-4 h-4" />
+                  Edit Orders
+                </Button>
+                {data.schemeSummary && data.schemeSummary.count > 0 && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => setEditingScheme(true)}
+                    className="inline-flex items-center gap-2"
+                  >
+                    <Edit className="w-4 h-4" />
+                    Edit Schemes
+                  </Button>
                 )}
-              </Button>
+                
+                {/* DYNAMIC DOWNLOAD BUTTONS */}
+                {data.downloadUrls && data.downloadUrls.length > 0 ? (
+                  data.downloadUrls.map((dl, idx) => (
+                    <Button
+                      key={idx}
+                      variant="primary"
+                      onClick={() => handleDownload(dl.type)}
+                      disabled={!!downloadingType}
+                      className="inline-flex items-center gap-2"
+                    >
+                      {downloadingType === dl.type ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          Downloading...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4" />
+                          {dl.type === 'sheets' ? 'Download Sheet Orders' : 
+                           dl.type === 'main' ? 'Download Main Order' : 'Download Excel File'}
+                        </>
+                      )}
+                    </Button>
+                  ))
+                ) : (
+                  // Fallback for backward compatibility
+                  <Button
+                    variant="primary"
+                    onClick={() => handleDownload('single')}
+                    disabled={!!downloadingType}
+                    className="inline-flex items-center gap-2"
+                  >
+                    {downloadingType ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Downloading...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" />
+                        Download Excel File
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
             )}
           </div>
 
@@ -282,12 +293,77 @@ console.log("ORDER RESULT RESPONSE:", res);
       </Card>
 
       {success && data.schemeSummary && data.schemeSummary.count > 0 && (
-  <SchemeSummaryCard
-    orderId={id!}
-    schemeSummary={data.schemeSummary}
-    fileName={data.fileName} // Pass filename
-  />
-)}
+          <div className="mb-6">
+            <SchemeSummaryCard
+                orderId={id!}
+                schemeSummary={data.schemeSummary}
+                fileName={data.fileName} 
+            />
+          </div>
+      )}
+
+      {/* PREVIEW CARD */}
+            {success && previewData.length > 0 && (
+                <Card>
+                    <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                        <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+                             <FileSpreadsheet className="w-5 h-5 text-green-600" />
+                             Converted File Preview
+                        </h3>
+                        <div className="text-xs text-gray-500">Showing first 10 rows</div>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-100 text-gray-700 font-medium">
+                                <tr>
+                                    {previewHeaders.map(h => (
+                                        <th key={h} className="px-4 py-3 border-b border-r border-gray-200 last:border-r-0 whitespace-nowrap">
+                                            {h}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {previewData.map((row, i) => {
+                                    // Highlights row if it appears in schemeDetails (matching by SAPCODE)
+                                    // This is more robust than checking sanitized row fields
+                                    const isSchemeRow = data.schemeDetails?.some(
+                                        s => s.productCode === row["SAPCODE"]
+                                    );
+                                    
+                                    return (
+                                    <tr key={i} className={isSchemeRow ? "bg-yellow-100 hover:bg-yellow-200" : "hover:bg-gray-50"}>
+                                        {previewHeaders.map(h => (
+                                            <td key={h} className="px-4 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap relative group">
+                                                {row[h]}
+                                                {h === "ORDERQTY" && row._upsell && (
+                                                    <div className="absolute top-1 right-1 cursor-help group/icon">
+                                                        <span className="text-lg" title={row._upsell.message}>💡</span>
+                                                        {/* Simple Tooltip */}
+                                                        <div className="absolute z-10 hidden group-hover/icon:block bg-black text-white text-xs px-2 py-1 rounded -top-8 left-1/2 -translate-x-1/2 w-48 text-center shadow-lg">
+                                                            {row._upsell.message}
+                                                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-black"></div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </td>
+                                        ))}
+                                    </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div className="p-3 border-t border-gray-200 bg-gray-50 text-center">
+                        <button 
+                            onClick={() => setEditingConverted(true)}
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                        >
+                            View Full File & Edit
+                        </button>
+                    </div>
+                </Card>
+            )}
 
 {success && data.schemeDetails && data.schemeDetails.length > 0 && (
   <Card>
@@ -307,21 +383,44 @@ console.log("ORDER RESULT RESPONSE:", res);
               </p>
             </div>
 
-            <Button
-              variant="warning"
-              size="sm"
-              onClick={() => {
-                setActiveSchemeRow({
-                  SAPCODE: row.productCode,
-                  ITEMDESC: row.productName,
-                  ORDERQTY: row.orderQty,
-                  _availableSchemes: row.availableSchemes || [] // future-proof
-                });
-                setSchemeModalOpen(true);
-              }}
-            >
-              Apply / Change Scheme
-            </Button>
+           <div className="flex gap-2">
+  {/* VIEW SCHEMES */}
+  <Button
+    variant="secondary"
+    size="sm"
+    onClick={() => {
+      setActiveSchemeRow({
+        SAPCODE: row.productCode,
+        ITEMDESC: row.productName,
+        ORDERQTY: row.orderQty,
+        _availableSchemes: row.availableSchemes || [],
+        viewOnly: true
+      });
+      setSchemeModalOpen(true);
+    }}
+  >
+    View Schemes
+  </Button>
+
+  {/* APPLY / CONVERT */}
+  <Button
+    variant="primary"
+    size="sm"
+    onClick={() => {
+      setActiveSchemeRow({
+        SAPCODE: row.productCode,
+        ITEMDESC: row.productName,
+        ORDERQTY: row.orderQty,
+        _availableSchemes: row.availableSchemes || [],
+        viewOnly: false
+      });
+      setSchemeModalOpen(true);
+    }}
+  >
+    Convert Order
+  </Button>
+</div>
+
           </div>
         ))}
       </div>
@@ -431,6 +530,26 @@ console.log("ORDER RESULT RESPONSE:", res);
     setSchemeModalOpen(false);
   }}
 />
+
+      {/* Edit Converted Orders Modal */}
+      {editingConverted && id && (
+        <ViewEditConvertedModal
+          isOpen={editingConverted}
+          onClose={() => setEditingConverted(false)}
+          uploadId={id}
+          fileName={data?.fileName}
+        />
+      )}
+
+      {/* Edit Scheme Modal */}
+      {editingScheme && id && (
+        <ViewEditSchemeModal
+          isOpen={editingScheme}
+          onClose={() => setEditingScheme(false)}
+          uploadId={id}
+          fileName={data?.fileName}
+        />
+      )}
 
     </div>
   );

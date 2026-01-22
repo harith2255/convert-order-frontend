@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Download, Eye, RefreshCw, FileText } from 'lucide-react';
+import { Search, Download, Eye, RefreshCw, FileText, Edit } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../Card';
 import { Button } from '../Button';
@@ -12,6 +12,8 @@ import api from '../../services/api';
 import { toast } from 'sonner';
 import { downloadOrderFile } from '../../services/orderApi';
 import { FileViewerModal } from '../modals/FileViewerModal';
+import { ViewEditConvertedModal } from '../modals/ViewEditConvertedModal';
+import { ViewEditSchemeModal } from '../modals/ViewEditSchemeModal';
 
 export function HistoryPage() {
   const navigate = useNavigate();
@@ -23,6 +25,8 @@ export function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [viewingFile, setViewingFile] = useState<{id: string, fileName?: string} | null>(null);
+  const [editingConverted, setEditingConverted] = useState<{id: string, fileName?: string} | null>(null);
+  const [editingScheme, setEditingScheme] = useState<{id: string, fileName?: string} | null>(null);
   
   // Pagination State
   const [page, setPage] = useState(1);
@@ -101,12 +105,13 @@ export function HistoryPage() {
     setIsModalOpen(true);
   };
 
-  const handleDownload = async (uploadId: string, fileName?: string) => {
+  const handleDownload = async (uploadId: string, fileName?: string, type?: string) => {
     if (!uploadId) return;
 
     try {
-      setDownloading(uploadId);
-      await downloadOrderFile(uploadId, fileName);
+      const loadingKey = type ? `${uploadId}-${type}` : uploadId;
+      setDownloading(loadingKey);
+      await downloadOrderFile(uploadId, fileName, type as any);
       toast.success("File downloaded successfully");
     } catch (err: any) {
       console.error("Download error:", err);
@@ -219,17 +224,78 @@ export function HistoryPage() {
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleDownload(row.id, row.fileName);
+                  setEditingConverted({ id: row.id, fileName: row.fileName });
                 }}
-                disabled={downloading === row.id}
-                title="Download File"
+                title="Edit Converted Orders"
               >
-                {downloading === row.id ? (
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Download className="w-4 h-4" />
-                )}
+                <Edit className="w-4 h-4 text-blue-600" />
               </Button>
+              {row.schemeSummary?.count > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingScheme({ id: row.id, fileName: row.fileName });
+                  }}
+                  title="Edit Schemes"
+                >
+                  <Edit className="w-4 h-4 text-yellow-600" />
+                </Button>
+              )}
+              
+              {/* DOWNLOAD BUTTONS */}
+              {row.downloadUrls && row.downloadUrls.length > 0 ? (
+                // Multiple files or specific types
+                row.downloadUrls.map((dl: any, idx: number) => {
+                  const isSheets = dl.type === 'sheets';
+                  const isMain = dl.type === 'main';
+                  const loadingKey = `${row.id}-${dl.type}`;
+                  
+                  return (
+                    <Button
+                      key={idx}
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Correctly pass type
+                        handleDownload(row.id, row.fileName, dl.type);
+                      }}
+                      disabled={downloading === loadingKey || downloading === row.id} // efficient disable
+                      title={isSheets ? "Download Sheet Orders" : isMain ? "Download Main Order" : "Download File"}
+                      className={isSheets ? "text-green-600" : isMain ? "text-blue-600" : ""}
+                    >
+                      {downloading === loadingKey ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
+                      {/* Optional: Add small label if space permits, or rely on tooltip/color */}
+                      {isSheets && <span className="text-[10px] ml-1 font-bold">Sheets</span>}
+                      {isMain && <span className="text-[10px] ml-1 font-bold">Main</span>}
+                    </Button>
+                  );
+                })
+              ) : (
+                // Fallback Single Download
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDownload(row.id, row.fileName);
+                  }}
+                  disabled={downloading === row.id}
+                  title="Download File"
+                >
+                  {downloading === row.id ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                </Button>
+              )}
             </>
           )}
         </div>
@@ -452,6 +518,32 @@ export function HistoryPage() {
           onClose={() => setViewingFile(null)}
           orderId={viewingFile.id}
           fileName={viewingFile.fileName}
+        />
+      )}
+
+      {/* Edit Converted Orders Modal */}
+      {editingConverted && (
+        <ViewEditConvertedModal
+          isOpen={!!editingConverted}
+          onClose={() => {
+            setEditingConverted(null);
+            fetchHistory(); // Refresh history after editing
+          }}
+          uploadId={editingConverted.id}
+          fileName={editingConverted.fileName}
+        />
+      )}
+
+      {/* Edit Scheme Modal */}
+      {editingScheme && (
+        <ViewEditSchemeModal
+          isOpen={!!editingScheme}
+          onClose={() => {
+            setEditingScheme(null);
+            fetchHistory(); // Refresh history after editing
+          }}
+          uploadId={editingScheme.id}
+          fileName={editingScheme.fileName}
         />
       )}
     </div>
