@@ -181,7 +181,9 @@ export function ViewEditSchemeModal({
             {hasChanges && <span className="ml-2 text-orange-600 font-medium">(Unsaved changes)</span>}
           </div>
 
-          <div className="overflow-x-auto border border-neutral-200 rounded-lg">
+          <div className="relative overflow-x-auto border rounded-lg">
+
+
             <table className="w-full text-sm">
               <thead className="bg-yellow-50 border-b border-neutral-200 sticky top-0">
                 <tr>

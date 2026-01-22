@@ -7,7 +7,7 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "sm" | "md" | "lg" | "xl" | "full";
 }
 
 export function CustomModal({
@@ -19,12 +19,8 @@ export function CustomModal({
   size = "md",
 }: ModalProps) {
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    }
-    return () => {
-      document.body.style.overflow = "unset";
-    };
+    if (isOpen) document.body.style.overflow = "hidden";
+    return () => (document.body.style.overflow = "unset");
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -34,28 +30,31 @@ export function CustomModal({
     md: "max-w-lg",
     lg: "max-w-3xl",
     xl: "max-w-6xl",
+    full: "max-w-screen-xl",
   };
 
   return (
     <>
-      {/* BACKDROP */}
+      {/* BACKDROP (ONLY THIS CLOSES MODAL) */}
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
+        className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* MODAL CONTAINER */}
-      <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center px-3 py-4 sm:p-6 overflow-y-auto">
+      {/* MODAL WRAPPER — NO onClick */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center px-2 sm:px-4 overflow-hidden">
+
         {/* MODAL */}
         <div
+          onClick={(e) => e.stopPropagation()}
           className={`
             relative bg-white rounded-2xl shadow-2xl w-full
             ${sizes[size]}
-            max-h-[95dvh] flex flex-col
+            max-h-[90dvh]
+            flex flex-col
           `}
-          onClick={(e) => e.stopPropagation()}
         >
-          {/* HEADER (STICKY) */}
+          {/* HEADER */}
           <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b bg-white">
             <h3 className="text-base sm:text-lg font-bold text-neutral-900">
               {title}
@@ -64,19 +63,21 @@ export function CustomModal({
               onClick={onClose}
               className="p-2 rounded-full hover:bg-neutral-100 text-neutral-500"
             >
-              <X className="w-5 h-5" />
+              ✕
             </button>
           </div>
 
-          {/* BODY (SCROLLABLE) */}
-          <div className="flex-1 overflow-y-auto px-5 py-4">
+          {/* BODY (THIS SCROLLS) */}
+          <div className="flex-1 overflow-auto px-5 py-4">
             {children}
           </div>
 
-          {/* FOOTER (STICKY) */}
+          {/* FOOTER */}
           {footer && (
-            <div className="sticky bottom-0 z-10 flex flex-wrap justify-end gap-3 px-5 py-4 border-t bg-white">
-              {footer}
+            <div className="sticky bottom-0 z-10 bg-white border-t px-5 py-4">
+              <div className="flex flex-col sm:flex-row sm:justify-end gap-2">
+                {footer}
+              </div>
             </div>
           )}
         </div>
@@ -84,5 +85,6 @@ export function CustomModal({
     </>
   );
 }
+
 
 export { CustomModal as Modal };

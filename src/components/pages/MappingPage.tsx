@@ -56,7 +56,17 @@ export function MappingPage() {
     productIndices: number[];
   }[]>([]);
   const [selectedRows, setSelectedRows] = useState<number[]>([]);
-  
+
+const formatProductDisplay = (p: any) => {
+  if (!p) return "";
+  return [p.baseName, p.variant, p.dosage]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+
   const SHEET_COLORS = [
     { bg: 'bg-blue-50', border: 'border-blue-300', text: 'text-blue-700', badge: 'bg-blue-100' },
     { bg: 'bg-green-50', border: 'border-green-300', text: 'text-green-700', badge: 'bg-green-100' },
@@ -588,25 +598,30 @@ export function MappingPage() {
                             {row.ITEMDESC?.length >= 2 && (
                               <div className="absolute z-20 w-full mt-1 bg-white border border-neutral-300 rounded shadow-lg max-h-48 overflow-auto">
                                 {allProducts
-                                  .filter(p => {
-                                    const normalize = (s = "") =>
-                                      s
-                                        .toUpperCase()
-                                        .replace(/MG|ML|MCG/g, "")
-                                        .replace(/[^A-Z0-9]/g, " ")
-                                        .replace(/\s+/g, " ")
-                                        .trim();
+                                 .filter(p => {
+  const normalizeTokens = (text = "") =>
+    text
+      .toUpperCase()
+      .replace(/MG|ML|MCG/g, "")
+      .replace(/[^A-Z0-9]/g, " ")
+      .split(/\s+/)
+      .filter(Boolean);
 
-                                    const inv = normalize(row.ITEMDESC);
-                                    const prod = normalize(p.productName);
-                                    const base = normalize(p.baseName || "");
+  const invTokens = normalizeTokens(row.ITEMDESC);
+  const prodTokens = normalizeTokens(p.productName);
+  const baseTokens = normalizeTokens(p.baseName || "");
 
-                                    if (!inv) return false;
-                                    if (prod.startsWith(inv)) return true;
-                                    if (base && inv.startsWith(base)) return true;
+  if (invTokens.length === 0) return false;
 
-                                    return false;
-                                  })
+  // ✅ order-independent match
+  const matchProduct = invTokens.every(t => prodTokens.includes(t));
+  const matchBase =
+    baseTokens.length > 0 &&
+    invTokens.every(t => baseTokens.includes(t));
+
+  return matchProduct || matchBase;
+})
+
                                   .slice(0, 10)
                                   .map(p => (
                                     <button
@@ -648,7 +663,10 @@ export function MappingPage() {
                                       }}
                                       className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b last:border-b-0 transition-colors"
                                     >
-                                      <div className="font-medium text-neutral-800">{p.productName}</div>
+                                    <div className="font-medium text-neutral-800">
+  {formatProductDisplay(p)}
+</div>
+
                                       <div className="text-xs text-neutral-500">
                                         {p.productCode} • {p.division}
                                       </div>
@@ -666,9 +684,10 @@ export function MappingPage() {
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
                                   <span className="text-green-600 flex-shrink-0">✓</span>
-                                  <span className="text-sm font-medium text-green-800 break-words">
-                                    {row.ITEMDESC}
-                                  </span>
+                                 <span className="text-sm font-medium text-green-800 break-words">
+  {formatProductDisplay(row.matchedProduct)}
+</span>
+
                                 </div>
                                 <span className="text-xs text-green-600 ml-6">
                                   (mapped)

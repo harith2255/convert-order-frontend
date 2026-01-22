@@ -182,8 +182,11 @@ export function ViewEditConvertedModal({
             {hasChanges && <span className="text-orange-600 font-medium">(Unsaved changes)</span>}
           </div>
 
-          <div className="overflow-x-auto border border-neutral-200 rounded-lg">
-            <table className="w-full text-xs sm:text-sm">
+          <div className="relative overflow-x-auto border rounded-lg">
+
+
+          <table className="min-w-max w-full text-xs sm:text-sm">
+
               <thead className="bg-neutral-50 border-b border-neutral-200 sticky top-0">
                 <tr>
                   {headers.map((header) => (
