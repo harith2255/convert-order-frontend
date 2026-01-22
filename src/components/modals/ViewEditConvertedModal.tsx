@@ -143,12 +143,14 @@ export function ViewEditConvertedModal({
 
   return (
     <Modal
-      isOpen={isOpen}
-      onClose={handleClose}
-      title="View & Edit Converted Orders"
-      size="xl"
-      footer={footer}
-    >
+  isOpen={isOpen}
+  onClose={handleClose}
+  title="View & Edit Converted Orders"
+  size="full" // 👈 instead of xl
+  className="max-w-screen-xl w-full mx-auto"
+  footer={footer}
+>
+
       {/* Messages */}
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2 text-red-700 text-sm">

@@ -338,10 +338,10 @@ export function ResultPage() {
                                                 {row[h]}
                                                 {h === "ORDERQTY" && row._upsell && (
                                                     <div className="absolute top-1 right-1 cursor-help group/icon">
-                                                        <span className="text-lg" title={row._upsell.message}>💡</span>
+                                                        {/* <span className="text-lg" title={row._upsell.message}>💡</span> */}
                                                         {/* Simple Tooltip */}
                                                         <div className="absolute z-10 hidden group-hover/icon:block bg-black text-white text-xs px-2 py-1 rounded -top-8 left-1/2 -translate-x-1/2 w-48 text-center shadow-lg">
-                                                            {row._upsell.message}
+                                                            {/* {row._upsell.message} */}
                                                             <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-black"></div>
                                                         </div>
                                                     </div>
