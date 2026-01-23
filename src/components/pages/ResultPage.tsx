@@ -82,7 +82,7 @@ export function ResultPage() {
         previewConvertedOrders(id, 1, 10).then(res => {
             if (res.success) {
                 setPreviewData(res.data || []);
-                setPreviewHeaders(res.headers || Object.keys(res.data?.[0] || {}));
+                setPreviewHeaders((res.headers || Object.keys(res.data?.[0] || {})).filter(k => !k.startsWith('_')));
             }
         }).catch(err => console.error("Preview fetch error", err));
      }
@@ -411,7 +411,24 @@ export function ResultPage() {
                                     
                                     return (
                                     <tr key={i} className={isSchemeRow ? "bg-yellow-100 hover:bg-yellow-200" : "hover:bg-gray-50"}>
-                                        {previewHeaders.map(h => (
+                                        {previewHeaders.map(h => {
+                                            // Skip internal or object keys that cause rendering crashes
+                                            if (h.startsWith('_') || typeof row[h] === 'object') {
+                                                // Exception: We might want null objects to be empty string
+                                                if (row[h] === null) return <td key={h} className="px-4 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap"></td>;
+                                                
+                                                // Specific handling for known objects if needed, otherwise skip render
+                                                // But we must render a TD to keep alignment if 'h' is in headers
+                                                // If 'h' is in headers, it implies we expect a column.
+                                                // If this is an accidental object column, we should render something safe.
+                                                return (
+                                                    <td key={h} className="px-4 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap text-xs text-gray-400 font-mono">
+                                                        {JSON.stringify(row[h]).slice(0, 20)}...
+                                                    </td>
+                                                );
+                                            }
+
+                                            return (
                                             <td key={h} className="px-4 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap relative group">
                                                 {row[h]}
                                                 {h === "ORDERQTY" && row._upsell && (
@@ -425,7 +442,7 @@ export function ResultPage() {
                                                     </div>
                                                 )}
                                             </td>
-                                        ))}
+                                        )})} 
                                     </tr>
                                     );
                                 })}

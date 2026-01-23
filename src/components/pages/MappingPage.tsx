@@ -12,7 +12,9 @@ import {
   RefreshCw,
   AlertTriangle,
   Zap,
-  Gift
+  Gift,
+  Package,
+  Database
 } from "lucide-react";
 import { Card } from "../Card";
 import { Button } from "../Button";
@@ -40,6 +42,10 @@ export function MappingPage() {
   const [showCandidates, setShowCandidates] = useState(false);
   
   const autoCustomerLocked = useRef(false);
+  
+  /* 📊 MASTER DATA COUNTS */
+  const [counts, setCounts] = useState({ products: 0, customers: 0 });
+  const [loadingCounts, setLoadingCounts] = useState(true);
 
   /* ✅ MASTER PRODUCTS FOR MANUAL MAPPING */
   const [allProducts, setAllProducts] = useState<any[]>([]);
@@ -94,8 +100,28 @@ const formatProductDisplay = (p: any) => {
   ];
 
   // ... (useEffect load products - SAME)
-  /* ---------------- LOAD MASTER PRODUCTS ---------------- */
+  /* ---------------- LOAD MASTER PRODUCTS & COUNTS ---------------- */
   useEffect(() => {
+    setLoadingCounts(true);
+    const fetchCounts = async () => {
+        try {
+            const [prodRes, custRes] = await Promise.all([
+                api.get("/admin/products", { params: { limit: 1 } }),
+                api.get("/admin/customers", { params: { limit: 1 } })
+            ]);
+            setCounts({
+                products: prodRes.data?.total || 0,
+                customers: custRes.data?.total || 0
+            });
+        } catch (err) {
+            console.error("Failed to fetch counts", err);
+        } finally {
+            setLoadingCounts(false);
+        }
+    };
+
+    fetchCounts();
+
     api
       .get("/admin/products", { params: { limit: 5000 } })
       .then(res => setAllProducts(res.data?.data || []))
@@ -400,6 +426,8 @@ const formatProductDisplay = (p: any) => {
           + Add Item
         </Button>
       </div>
+      
+
       
       {/* ... CUSTOMER CARD ... */}
       <Card>
@@ -877,14 +905,40 @@ const formatProductDisplay = (p: any) => {
       </Card>
 
        {/* 🎁 SCHEME SUGGESTION MODAL */}
-       {showSchemeModal && (
-        <Modal 
+        {showSchemeModal && (
+        <Modal
+        className="max-w-[600px] rounded-lg shadow-lg overflow-auto "
             isOpen={showSchemeModal} 
             onClose={() => {
                 setShowSchemeModal(false);
                 setSchemeSuggestions([]);
             }}
             title="🎁 Scheme Opportunities Detected!"
+            size="md"
+            footer={
+              <>
+                    <Button 
+                        variant="secondary" 
+                        onClick={() => {
+                            setShowSchemeModal(false);
+                            // Proceed with conversion using original values
+                            handleConvert(true); 
+                        }}
+                    >
+                        Skip & Convert
+                    </Button>
+                    <Button 
+                        variant="primary"
+                        onClick={() => {
+                            setShowSchemeModal(false);
+                            // Proceed with conversion using UPDATED values
+                            handleConvert(true); 
+                        }}
+                    >
+                        Done & Convert
+                    </Button>
+              </>
+            }
         >
             <div className="space-y-4">
                 <Alert variant="info">
@@ -893,7 +947,7 @@ const formatProductDisplay = (p: any) => {
                     </AlertDescription>
                 </Alert>
 
-                <div className="max-h-96 overflow-auto space-y-3">
+                <div className="space-y-3">
                     {schemeSuggestions.map((s, idx) => (
                         <div key={idx} className="border p-3 rounded bg-amber-50 border-amber-200">
                              <div className="font-medium text-sm text-gray-800">{s.itemDesc}</div>
@@ -912,39 +966,13 @@ const formatProductDisplay = (p: any) => {
 
                              <Button 
                                 size="sm" 
-                                className="w-full mt-3"
+                                className="w-full mt-3 bg-blue-500 text-white border border-blue-200"
                                 onClick={() => applySchemeSuggestion(s)}
                             >
                                 Upgrade to {s.suggestedQty} (+{s.freeQty} FREE)
                             </Button>
                         </div>
                     ))}
-                </div>
-
-                <div className="flex justify-end gap-2 pt-4 border-t">
-                    <Button 
-                        variant="secondary" 
-                        onClick={() => {
-                            setShowSchemeModal(false);
-                            // Proceed with conversion using original values
-                            handleConvert(true); 
-                        }}
-                    >
-                        Skip & Convert
-                    </Button>
-                    <Button 
-                        onClick={() => {
-                            setShowSchemeModal(false);
-                             // Proceed with conversion using UPDATED values (if any applied)
-                             // If user applied strictly all, list is empty? 
-                             // No, applying updates ROWS. 
-                             // Just trigger convert again (with check to ensure we don't loop endlessly if suggestions persist? 
-                             // No, if applied, qty changes. Next check won't find same suggestion.)
-                            handleConvert(true); 
-                        }}
-                    >
-                        Done & Convert
-                    </Button>
                 </div>
             </div>
         </Modal>

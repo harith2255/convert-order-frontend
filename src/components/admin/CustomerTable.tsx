@@ -173,7 +173,7 @@ export function CustomerTable() {
   return (
     <Card>
       <div className="flex justify-between items-center mb-3">
-        <h3 className="text-lg font-semibold">Customers</h3>
+        <h3 className="text-lg font-semibold">Customers ({total})</h3>
         <Button size="sm" onClick={handleCreate}>
           <Plus className="w-4 h-4 mr-1" />
           Add Customer

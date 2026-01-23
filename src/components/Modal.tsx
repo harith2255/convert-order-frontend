@@ -18,7 +18,8 @@ export function CustomModal({
   children,
   footer,
   size = "md",
-}: ModalProps) {
+  className = "",
+}: ModalProps & { className?: string }) {
   useEffect(() => {
     if (isOpen) document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = "unset"; };
@@ -54,6 +55,7 @@ export function CustomModal({
             ${sizes[size]}
             max-h-[85vh]
             flex flex-col
+            ${className}
           `}
         >
           {/* HEADER */}

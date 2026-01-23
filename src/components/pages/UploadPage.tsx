@@ -164,7 +164,7 @@ const handleContinue = async () => {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-7xl">
       {/* Page Header */}
       <div>
         <h1 className="text-3xl font-bold text-neutral-900">Upload Order Files</h1>
@@ -219,9 +219,9 @@ const handleContinue = async () => {
               </span>
             </label>
 
-            <p className="text-xs text-neutral-500">
+            {/* <p className="text-xs text-neutral-500">
               Support multiple file upload
-            </p>
+            </p> */}
           </div>
         </div>
 

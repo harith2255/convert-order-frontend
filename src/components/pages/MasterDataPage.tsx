@@ -18,6 +18,7 @@ export function MasterDataPage() {
 
 
 
+
   /* ===========================
      DATABASE OPERATIONS
   ============================ */
@@ -68,6 +69,8 @@ export function MasterDataPage() {
           </p>
         </div>
       </Card>
+
+
 
       <Card>
         <div className="flex justify-between items-center mb-4">

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { fetchAdminDashboard } from "../../services/adminDashboardApi";
 import { toast } from "sonner";
 
@@ -11,6 +12,7 @@ import {
   Activity,
   FileText,
   CheckCircle,
+  Upload
 } from "lucide-react";
 
 import { Card } from "../Card";
@@ -36,7 +38,8 @@ interface DashboardStats {
 }
 
 export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
-const [stats, setStats] = useState<DashboardStats | null>(null);
+  const navigate = useNavigate();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
 
   const [alerts, setAlerts] = useState<any[]>([]);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
@@ -187,6 +190,8 @@ const activityColumns = [
         </div>
         <Badge variant="info">Live Data</Badge>
       </div>
+
+      {/* 🚀 QUICK ACTIONS REMOVED (Moved to Sidebar) */}
 
       {/* Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
