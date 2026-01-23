@@ -59,8 +59,28 @@ export function MappingPage() {
 
 const formatProductDisplay = (p: any) => {
   if (!p) return "";
-  return p.productName || 
-         [p.baseName, p.variant, p.dosage].filter(Boolean).join(" ");
+  
+  // 🔥 FIX: Reorder product name from "BRAND STRENGTH VARIANT" to "BRAND VARIANT STRENGTH"
+  // e.g. "AMLONG 50 MT" -> "AMLONG MT 50"
+  const reorderProductName = (name: string) => {
+    if (!name) return "";
+    
+    // Match pattern: BRAND + NUMBER + VARIANT (e.g. AMLONG 50 MT, NULONG 40 OL)
+    const match = name.match(/^([A-Z\-]+)\s+(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)\s+([A-Z]+)$/i);
+    if (match) {
+      const [, brand, strength, variant] = match;
+      return `${brand} ${variant} ${strength}`;
+    }
+    
+    return name; // Return as-is if pattern doesn't match
+  };
+  
+  const displayName = p.productName 
+    ? reorderProductName(p.productName)
+    : [p.baseName, p.variant, p.dosage].filter(Boolean).join(" ");
+    
+  // 🔥 FIX: Replace hyphens with spaces (Requested by user)
+  return displayName.replace(/-/g, " ");
 };
 
 
@@ -123,24 +143,25 @@ const formatProductDisplay = (p: any) => {
 
       if (name) setCustomerInput(name);
 
-      if (source === 'AUTO_UNIQUE' && code) {
+      // 🔥 FIX: Auto-apply if source is EXACT or FUZZY_AUTO (backend auto-matched)
+      if ((source === 'EXACT' || source === 'FUZZY_AUTO') && code) {
         setSelectedCustomer({
           customerCode: code,
           customerName: name,
           city: parsedResult.customer.city,
           state: parsedResult.customer.state
         });
-        autoCustomerLocked.current = false;
-        toast.success(`Auto-selected: ${name}`);
+        autoCustomerLocked.current = true; // Lock to prevent search overwriting
+        toast.success(`Auto-selected customer: ${name}`);
       }
 
       if (source === 'MANUAL_REQUIRED' && candidates?.length > 0) {
-        setCustomers(candidates);
+        setCustomers(candidates.map((c: any) => c.customer || c)); // Handle both formats
         setShowCandidates(true);
         toast.warning(`Multiple customers found for "${name}". Please select one.`);
       }
 
-      if (source === 'NOT_FOUND') {
+      if (source === 'NONE' || source === 'NOT_FOUND') {
         toast.warning(`Customer "${name}" not found in master. Please search and select.`);
       }
     }
@@ -261,6 +282,8 @@ const formatProductDisplay = (p: any) => {
     toast.success("Sheet removed");
   };
 
+
+
   /* ---------------- SCHEME CHECK LOGIC ---------------- */
   const checkForSchemes = async () => {
     try {
@@ -342,7 +365,9 @@ const formatProductDisplay = (p: any) => {
           ...r,
           ORDERQTY: Number(r.ORDERQTY) || 0,
           // If manually mapped, ensure matchedProduct is fully populated or at least id present
-          matchedProduct: r.matchedProduct ? { ...r.matchedProduct } : null
+          matchedProduct: r.matchedProduct ? { ...r.matchedProduct } : null,
+          // 🔥 FIX: Send the exact displayed name to backend
+          ITEMDESC: r.matchedProduct ? formatProductDisplay(r.matchedProduct) : r.ITEMDESC
       }));
 
       const res = await api.post("/orders/convert", {
@@ -504,6 +529,8 @@ const formatProductDisplay = (p: any) => {
             >
               📋 Create Separate Sheet
             </Button>
+            
+
           </div>
 
           {/* Sheets Panel */}

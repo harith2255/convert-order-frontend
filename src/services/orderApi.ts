@@ -121,3 +121,31 @@ export const updateSchemeData = async (id: string, schemeDetails: any[]) => {
   return data;
 };
 
+// Generate Division Report
+export const generateDivisionReport = async (uploadId: string, division?: string) => {
+  const { data } = await api.post("/orders/convert/division-report", { uploadId, division });
+  return data;
+};
+
+// Helper to download file from URL (Blob)
+export const downloadFileFromUrl = async (url: string) => {
+  // Remove /api prefix if present because axios baseURL already includes it
+  const cleanUrl = url.replace(/^\/api/, "");
+  const res = await api.get(cleanUrl, { responseType: "blob" });
+  
+  const blob = new Blob([res.data], {
+    type: res.headers["content-type"] || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  });
+
+  const filename = url.split('/').pop() || "download.xlsx";
+  
+  const blobUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(blobUrl);
+};
+

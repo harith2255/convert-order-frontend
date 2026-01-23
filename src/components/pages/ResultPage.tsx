@@ -19,7 +19,7 @@ import { Card } from "../Card";
 import { Button } from "../Button";
 import { Table } from "../Table";
 import { Badge } from "../Badge";
-import { getOrderResult, downloadOrderFile, previewConvertedOrders } from "../../services/orderApi";
+import { getOrderResult, downloadOrderFile, previewConvertedOrders, generateDivisionReport, downloadFileFromUrl } from "../../services/orderApi";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { SchemeSummaryCard } from "../../components/SchemeSummary.tsx";
@@ -34,6 +34,10 @@ interface ConversionData {
     totalFreeQty: number;
   };
   fileName?: string; // Add fileName field
+  convertedData?: {
+    headers: string[];
+    rows: any[];
+  };
   schemeDetails?: any[];
   errors: Array<{
     rowNumber: number;
@@ -64,6 +68,10 @@ export function ResultPage() {
   const [data, setData] = useState<ConversionData | null>(null);
   const [schemeModalOpen, setSchemeModalOpen] = useState(false);
   const [activeSchemeRow, setActiveSchemeRow] = useState<any>(null);
+  
+  // Division Filter State
+  const [divisions, setDivisions] = useState<string[]>([]);
+  const [selectedDivision, setSelectedDivision] = useState<string>("");
   const [editingConverted, setEditingConverted] = useState(false);
   const [editingScheme, setEditingScheme] = useState(false);
   const [previewData, setPreviewData] = useState<any[]>([]);
@@ -79,6 +87,27 @@ export function ResultPage() {
         }).catch(err => console.error("Preview fetch error", err));
      }
   }, [success, id]);
+
+  // Extract Divisions when data loads (or preview loads)
+  useEffect(() => {
+    let sourceRows = (data as any)?.convertedData?.rows;
+    // Fallback to preview data if main rows missing (e.g. large dataset optimization)
+    if (!sourceRows || sourceRows.length === 0) {
+        sourceRows = previewData;
+    }
+
+    if (sourceRows && Array.isArray(sourceRows) && sourceRows.length > 0) {
+        const uniqueDivs = new Set<string>();
+        sourceRows.forEach((r: any) => {
+            // Robust check for division key
+            const dvn = r.DVN || r.Division || r.DIVISION || r.division || r.dvn;
+            if (dvn && typeof dvn === 'string') uniqueDivs.add(dvn);
+        });
+        // Append to existing to avoid overwrite if we load main data later?
+        // No, just set.
+        setDivisions(Array.from(uniqueDivs).sort());
+    }
+  }, [data, previewData]);
 
   useEffect(() => {
     if (!id) {
@@ -162,6 +191,24 @@ export function ResultPage() {
     } catch (err: any) {
       console.error("Download error:", err);
       toast.error("Failed to download file");
+    } finally {
+      setDownloadingType(null);
+    }
+  };
+
+  const handleDivisionDownload = async (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    if (!id) return;
+    try {
+      setDownloadingType('division');
+      // Pass selected division
+      const res = await generateDivisionReport(id, selectedDivision);
+      if (res.downloadUrl) {
+        await downloadFileFromUrl(res.downloadUrl);
+        toast.success("Division report downloaded");
+      }
+    } catch (err) {
+      toast.error("Failed to generate division report");
     } finally {
       setDownloadingType(null);
     }
@@ -275,6 +322,42 @@ export function ResultPage() {
                     )}
                   </Button>
                 )}
+
+                {/* Division Report Section */}
+                <div className="flex items-center gap-2">
+                    {divisions.length > 0 && (
+                        <select 
+                            value={selectedDivision}
+                            onChange={(e) => setSelectedDivision(e.target.value)}
+                            className="text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50 h-9 bg-white"
+                        >
+                            <option value="">All Divisions</option>
+                            {divisions.map(d => (
+                                <option key={d} value={d}>{d}</option>
+                            ))}
+                        </select>
+                    )}
+
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={handleDivisionDownload}
+                        disabled={!!downloadingType}
+                        className="inline-flex items-center gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 bg-white"
+                    >
+                        {downloadingType === 'division' ? (
+                            <>
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                Generating...
+                            </>
+                        ) : (
+                            <>
+                                <Download className="w-4 h-4" />
+                                {selectedDivision ? `Download ${selectedDivision}` : 'Division Report'}
+                            </>
+                        )}
+                    </Button>
+                </div>
               </div>
             )}
           </div>
