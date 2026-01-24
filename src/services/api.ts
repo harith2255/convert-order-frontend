@@ -23,4 +23,10 @@ api.interceptors.response.use(
   }
 );
 
+// ✅ Fetch full result for a single upload
+export const getUploadResult = async (id: string) => {
+  const response = await api.get(`/admin/dashboard/upload/${id}`); // ✅ Fixed path
+  return response.data;
+};
+
 export default api;
