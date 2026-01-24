@@ -511,7 +511,7 @@ export function ResultPage() {
   </Card>
 )}
 
-      {/* TEMPLATE INFO */}
+      {/* TEMPLATE INFO
       {success && (
         <Card>
           <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
@@ -529,7 +529,7 @@ export function ResultPage() {
             </div>
           </div>
         </Card>
-      )}
+      )} */}
 
       {/* WARNINGS TABLE */}
       {warningRows.length > 0 && (
