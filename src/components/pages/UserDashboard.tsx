@@ -151,7 +151,7 @@ export function UserDashboard() {
       {/* Quick Actions */}
       <Card>
         <h3 className="text-lg font-semibold text-neutral-900 mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <button
             onClick={() => navigate('/upload')}
             className="flex items-center gap-3 p-4 border border-neutral-200 rounded-lg hover:border-primary-300 hover:bg-primary-50 transition-all group"
@@ -178,7 +178,7 @@ export function UserDashboard() {
             </div>
           </button>
 
-          <button 
+          {/* <button 
             onClick={() => {
               toast.info('Template download coming soon');
             }}
@@ -191,7 +191,7 @@ export function UserDashboard() {
               <p className="font-medium text-neutral-900">Template</p>
               <p className="text-sm text-neutral-600">Download template</p>
             </div>
-          </button>
+          </button> */}
         </div>
       </Card>
 
