@@ -12,7 +12,6 @@ import { MappingPage } from "./components/pages/MappingPage.tsx";
 import { ResultPage } from "./components/pages/ResultPage.tsx";
 import { HistoryPage } from "./components/pages/HistoryPage.tsx";
 import { AdminDashboard } from "./components/pages/AdminDashboard.tsx";
-import { MappingRulesPage } from "./components/pages/MappingRulesPage.tsx";
 import { UserAccessPage } from "./components/pages/UserAccessPage.tsx";
 import ProtectedRoute from "./components/ProtectedRoutes.tsx";
 import { MasterDataPage } from "./components/pages/MasterDataPage.tsx";

@@ -22,9 +22,7 @@ import { Table } from "../Table";
 import { Badge } from "../Badge";
 import api from "../../services/api";
 
-interface AdminDashboardProps {
-  onNavigate: (page: string) => void;
-}
+interface AdminDashboardProps {}
 
 interface DashboardStats {
   totalUsers: number;
@@ -37,7 +35,7 @@ interface DashboardStats {
   schemes: number;
 }
 
-export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
+export function AdminDashboard({ }: AdminDashboardProps) {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats | null>(null);
 
