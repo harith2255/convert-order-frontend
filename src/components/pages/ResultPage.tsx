@@ -4,71 +4,48 @@
  */
 import React, { useEffect, useState } from "react";
 import {
-  CheckCircle,
   XCircle,
-  Download,
   AlertTriangle,
   RefreshCw,
-  FileSpreadsheet,
-  AlertCircle,
-  CheckCircle2,
   Edit,
+  FileSpreadsheet,
+  CheckCircle,
 } from "lucide-react";
-import { Alert } from "../ui/alert";
-import { Card } from "../Card";
 import { Button } from "../Button";
+import { Card } from "../Card";
 import { Table } from "../Table";
 import { Badge } from "../Badge";
-import { getOrderResult, downloadOrderFile, previewConvertedOrders, generateDivisionReport, downloadFileFromUrl } from "../../services/orderApi";
+import {
+  getOrderResult,
+  downloadOrderFile,
+  previewConvertedOrders,
+  generateDivisionReport,
+  downloadFileFromUrl,
+} from "../../services/orderApi";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { SchemeSummaryCard } from "../../components/SchemeSummary.tsx";
 import { SchemeSelectionModal } from "../../components/modals/SchemeModal.tsx";
 import { ViewEditConvertedModal } from "../modals/ViewEditConvertedModal";
 import { ViewEditSchemeModal } from "../modals/ViewEditSchemeModal";
+import { conversionData } from "../../types";
 
-interface ConversionData {
-  successRows: number;
-   schemeSummary?: {
-    count: number;
-    totalFreeQty: number;
-  };
-  fileName?: string; // Add fileName field
-  convertedData?: {
-    headers: string[];
-    rows: any[];
-  };
-  schemeDetails?: any[];
-  errors: Array<{
-    rowNumber: number;
-    field: string;
-    error: string;
-    originalValue?: string;
-    suggestedFix?: string;
-  }>;
-  warnings: Array<{
-    rowNumber: number;
-    field: string;
-    warning: string;
-    originalValue?: string;
-    newValue?: string | number;
-  }>;
-  processingTime: string | number;
-  downloadUrls?: Array<{ type: string; url: string }>;
-  status: string;
-}
+// Sub-components
+import { ConversionSummary } from "../../components/result-page/ConversionSummary";
+import { DownloadActions } from "../../components/result-page/DownloadActions";
+import { PreviewTable } from "../../components/result-page/PreviewTable";
 
 export function ResultPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
-  const [downloadingType, setDownloadingType] = useState<string | null>(null); // Track which button is downloading
+  const [downloadingType, setDownloadingType] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [data, setData] = useState<ConversionData | null>(null);
+  const [data, setData] = useState<conversionData | null>(null);
   const [schemeModalOpen, setSchemeModalOpen] = useState(false);
   const [activeSchemeRow, setActiveSchemeRow] = useState<any>(null);
-  
+
   // Division Filter State
   const [divisions, setDivisions] = useState<string[]>([]);
   const [selectedDivision, setSelectedDivision] = useState<string>("");
@@ -78,34 +55,36 @@ export function ResultPage() {
   const [previewHeaders, setPreviewHeaders] = useState<string[]>([]);
 
   useEffect(() => {
-     if (success && id) {
-        previewConvertedOrders(id, 1, 10).then(res => {
-            if (res.success) {
-                setPreviewData(res.data || []);
-                setPreviewHeaders((res.headers || Object.keys(res.data?.[0] || {})).filter(k => !k.startsWith('_')));
-            }
-        }).catch(err => console.error("Preview fetch error", err));
-     }
+    if (success && id) {
+      previewConvertedOrders(id, 1, 10)
+        .then((res) => {
+          if (res.success) {
+            setPreviewData(res.data || []);
+            setPreviewHeaders(
+              (res.headers || Object.keys(res.data?.[0] || {})).filter(
+                (k: string) => !k.startsWith("_")
+              )
+            );
+          }
+        })
+        .catch((err) => console.error("Preview fetch error", err));
+    }
   }, [success, id]);
 
-  // Extract Divisions when data loads (or preview loads)
+  // Extract Divisions when data loads
   useEffect(() => {
     let sourceRows = (data as any)?.convertedData?.rows;
-    // Fallback to preview data if main rows missing (e.g. large dataset optimization)
     if (!sourceRows || sourceRows.length === 0) {
-        sourceRows = previewData;
+      sourceRows = previewData;
     }
 
     if (sourceRows && Array.isArray(sourceRows) && sourceRows.length > 0) {
-        const uniqueDivs = new Set<string>();
-        sourceRows.forEach((r: any) => {
-            // Robust check for division key
-            const dvn = r.DVN || r.Division || r.DIVISION || r.division || r.dvn;
-            if (dvn && typeof dvn === 'string') uniqueDivs.add(dvn);
-        });
-        // Append to existing to avoid overwrite if we load main data later?
-        // No, just set.
-        setDivisions(Array.from(uniqueDivs).sort());
+      const uniqueDivs = new Set<string>();
+      sourceRows.forEach((r: any) => {
+        const dvn = r.DVN || r.Division || r.DIVISION || r.division || r.dvn;
+        if (dvn && typeof dvn === "string") uniqueDivs.add(dvn);
+      });
+      setDivisions(Array.from(uniqueDivs).sort());
     }
   }, [data, previewData]);
 
@@ -123,41 +102,43 @@ export function ResultPage() {
         const res = await getOrderResult(id);
         if (!mounted) return;
 
-        // 🔥 Check for cached scheme data from EditOrdersPage
+        // 🔥 Check for cached scheme data
         let schemeDetails = res.schemeDetails || [];
         const cachedSchemeData = sessionStorage.getItem(`schemeDetails_${id}`);
         if (cachedSchemeData) {
           try {
             schemeDetails = JSON.parse(cachedSchemeData);
-            // Clear cache after reading
             sessionStorage.removeItem(`schemeDetails_${id}`);
           } catch (e) {
             console.warn("Failed to parse cached scheme data");
           }
         }
 
-        const conversionData: ConversionData = {
+        const conversionData: conversionData = {
           successRows: res.recordsProcessed || 0,
           errors: Array.isArray(res.errors) ? res.errors : [],
           warnings: Array.isArray(res.warnings) ? res.warnings : [],
           processingTime: res.processingTime || "-",
           status: res.status || "UNKNOWN",
           schemeSummary: res.schemeSummary || null,
-          fileName: res.fileName, 
+          fileName: res.fileName,
           schemeDetails: schemeDetails,
-          downloadUrls: res.downloadUrls || [] // Capture download URLs
+          downloadUrls: res.downloadUrls || [],
         };
 
         setData(conversionData);
-        // ... rest of effect
+
         const isSuccess =
           res.status === "CONVERTED" ||
-          ((res.recordsProcessed || 0) > 0 && (!res.errors || res.errors.length === 0));
+          ((res.recordsProcessed || 0) > 0 &&
+            (!res.errors || res.errors.length === 0));
 
         setSuccess(isSuccess);
 
         if (isSuccess) {
-          toast.success(`✅ ${conversionData.successRows} records converted successfully`);
+          toast.success(
+            `✅ ${conversionData.successRows} records converted successfully`
+          );
         } else {
           toast.error("Conversion completed with errors");
         }
@@ -175,19 +156,30 @@ export function ResultPage() {
     };
   }, [id, navigate]);
 
-  const handleDownload = async (type: string = 'single') => {
+  const handleDownload = async (type: string = "single") => {
     if (!id) return;
 
     try {
       setDownloadingType(type);
-      // Map 'single', 'sheets', 'main' to API types if needed, currently they match
-      const apiType = (type === 'sheets' || type === 'main') ? type as 'sheets' | 'main' : undefined;
-      
-      const prefix = type === 'sheets' ? 'Sheet Orders' : type === 'main' ? 'Main Order' : '';
+      const apiType =
+        type === "sheets" || type === "main"
+          ? (type as "sheets" | "main")
+          : undefined;
+
+      const prefix =
+        type === "sheets" ? "Sheet Orders" : type === "main" ? "Main Order" : "";
       const name = prefix ? `${prefix} - ${data?.fileName}` : data?.fileName;
 
       await downloadOrderFile(id, name, apiType);
-      toast.success(`${type === 'sheets' ? 'Sheet Orders' : type === 'main' ? 'Main Order' : 'File'} downloaded successfully`);
+      toast.success(
+        `${
+          type === "sheets"
+            ? "Sheet Orders"
+            : type === "main"
+            ? "Main Order"
+            : "File"
+        } downloaded successfully`
+      );
     } catch (err: any) {
       console.error("Download error:", err);
       toast.error("Failed to download file");
@@ -196,12 +188,10 @@ export function ResultPage() {
     }
   };
 
-  const handleDivisionDownload = async (e?: React.MouseEvent) => {
-    if (e) e.preventDefault();
+  const handleDivisionDownload = async () => {
     if (!id) return;
     try {
-      setDownloadingType('division');
-      // Pass selected division
+      setDownloadingType("division");
       const res = await generateDivisionReport(id, selectedDivision);
       if (res.downloadUrl) {
         await downloadFileFromUrl(res.downloadUrl);
@@ -213,11 +203,12 @@ export function ResultPage() {
       setDownloadingType(null);
     }
   };
+
   if (loading) {
     return (
-        <div className="min-h-screen flex items-center justify-center">
-            <RefreshCw className="w-8 h-8 animate-spin text-blue-600" />
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <RefreshCw className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
     );
   }
 
@@ -244,292 +235,130 @@ export function ResultPage() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl space-y-6">
       <div className="flex items-center gap-3 mb-6">
-           <Button variant="ghost" onClick={() => navigate("/upload")}>Back</Button>
-           <h1 className="text-2xl font-bold text-neutral-800">Conversion Results</h1>
+        <Button variant="ghost" onClick={() => navigate("/upload")}>
+          Back
+        </Button>
+        <h1 className="text-2xl font-bold text-neutral-800">
+          Conversion Results
+        </h1>
       </div>
 
+      {/* SUMMARY & ACTIONS */}
       <Card>
-        <div className="p-4 sm:p-6 flex flex-col sm:flex-row items-start justify-between gap-6 sm:gap-0">
-           <div className="flex items-center gap-4 w-full sm:w-auto">
-               {success ? (
-                  <div className="bg-green-100 p-3 rounded-full flex-shrink-0">
-                     <CheckCircle2 className="w-8 h-8 text-green-600" />
-                  </div>
-               ) : (
-                  <div className="bg-red-100 p-3 rounded-full flex-shrink-0">
-                     <XCircle className="w-8 h-8 text-red-600" />
-                  </div>
-               )}
-               <div>
-                  <h2 className="text-xl font-bold">
-                     {success ? "Conversion Successful" : "Conversion Failed"}
-                  </h2>
-                  <div className="flex flex-wrap gap-4 mt-1 text-sm text-neutral-600">
-                      <span>Processed: <strong>{data.successRows + errorRows.length}</strong> rows</span>
-                      <span className="flex items-center gap-1"><RefreshCw className="w-3 h-3"/> {data.processingTime}</span>
-                  </div>
-               </div>
-           </div>
+        <div className="p-4 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-6 sm:gap-0">
+          <ConversionSummary
+             success={success} 
+             data={data}
+             errorCount={errorRows.length}
+           />
 
-           <div className="flex flex-col items-start sm:items-end gap-4 w-full sm:w-auto mt-4 sm:mt-0">
-
-
-            {success && (
-              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                
-                {/* DYNAMIC DOWNLOAD BUTTONS */}
-                {data.downloadUrls && data.downloadUrls.length > 0 ? (
-                  data.downloadUrls.map((dl, idx) => (
-                    <Button
-                      key={idx}
-                      variant="primary"
-                      onClick={() => handleDownload(dl.type)}
-                      disabled={!!downloadingType}
-                      className="inline-flex items-center justify-center gap-2 w-full sm:w-auto"
-                    >
-                      {downloadingType === dl.type ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          Downloading...
-                        </>
-                      ) : (
-                        <>
-                          <Download className="w-4 h-4" />
-                          {dl.type === 'sheets' ? 'Download Sheet Orders' : 
-                           dl.type === 'main' ? 'Download Main Order' : 'Download Excel File'}
-                        </>
-                      )}
-                    </Button>
-                  ))
-                ) : (
-                  // Fallback for backward compatibility
-                  <Button
-                    variant="primary"
-                    onClick={() => handleDownload('single')}
-                    disabled={!!downloadingType}
-                    className="inline-flex items-center justify-center gap-2 w-full sm:w-auto"
-                  >
-                    {downloadingType ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        Downloading...
-                      </>
-                    ) : (
-                      <>
-                        <Download className="w-4 h-4" />
-                        Download Excel File
-                      </>
-                    )}
-                  </Button>
-                )}
-
-                {/* Division Report Section */}
-                <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
-                    {divisions.length > 0 && (
-                        <select 
-                            value={selectedDivision}
-                            onChange={(e) => setSelectedDivision(e.target.value)}
-                            className="text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50 h-9 bg-white w-full sm:w-auto"
-                        >
-                            <option value="">All Divisions</option>
-                            {divisions.map(d => (
-                                <option key={d} value={d}>{d}</option>
-                            ))}
-                        </select>
-                    )}
-
-                    <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={handleDivisionDownload}
-                        disabled={!!downloadingType}
-                        className="inline-flex items-center justify-center gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 bg-white w-full sm:w-auto"
-                    >
-                        {downloadingType === 'division' ? (
-                            <>
-                                <RefreshCw className="w-4 h-4 animate-spin" />
-                                Generating...
-                            </>
-                        ) : (
-                            <>
-                                <Download className="w-4 h-4" />
-                                {selectedDivision ? `Download ${selectedDivision}` : 'Division Report'}
-                            </>
-                        )}
-                    </Button>
+           {success && (
+                <div className="flex items-center gap-4">
+                     <DownloadActions
+                        data={data}
+                        downloadingType={downloadingType}
+                        onDownload={handleDownload}
+                        divisions={divisions}
+                        selectedDivision={selectedDivision}
+                        onDivisionChange={setSelectedDivision}
+                        onDivisionDownload={handleDivisionDownload}
+                     />
+                    {/* Icon */}
+                    <div className="flex-shrink-0 hidden sm:block">
+                        <FileSpreadsheet className="w-16 h-16 text-green-600" />
+                    </div>
                 </div>
-              </div>
-            )}
-          </div>
-
-          {success && (
-            <div className="flex-shrink-0 hidden sm:block">
-              <FileSpreadsheet className="w-16 h-16 text-green-600" />
-            </div>
-          )}
+           )}
         </div>
       </Card>
 
       {success && data.schemeSummary && data.schemeSummary.count > 0 && (
-          <div className="mb-6">
-            <SchemeSummaryCard
-                orderId={id!}
-                schemeSummary={data.schemeSummary}
-                fileName={data.fileName} 
-            />
-          </div>
+        <div className="mb-6">
+          <SchemeSummaryCard
+            orderId={id!}
+            schemeSummary={data.schemeSummary}
+            fileName={data.fileName}
+          />
+        </div>
       )}
 
       {/* PREVIEW CARD */}
-            {success && previewData.length > 0 && (
-                <Card>
-                    <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
-                        <h3 className="font-semibold text-gray-800 flex items-center gap-2">
-                             <FileSpreadsheet className="w-5 h-5 text-green-600" />
-                             Converted File Preview
-                        </h3>
-                        <div className="text-xs text-gray-500">Showing first 10 rows</div>
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-100 text-gray-700 font-medium">
-                                <tr>
-                                    {previewHeaders.map(h => (
-                                        <th key={h} className="px-4 py-3 border-b border-r border-gray-200 last:border-r-0 whitespace-nowrap">
-                                            {h}
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {previewData.map((row, i) => {
-                                    // Highlights row if it appears in schemeDetails (matching by SAPCODE)
-                                    // This is more robust than checking sanitized row fields
-                                    const isSchemeRow = data.schemeDetails?.some(
-                                        s => s.productCode === row["SAPCODE"]
-                                    );
-                                    
-                                    return (
-                                    <tr key={i} className={isSchemeRow ? "bg-yellow-100 hover:bg-yellow-200" : "hover:bg-gray-50"}>
-                                        {previewHeaders.map(h => {
-                                            // Skip internal or object keys that cause rendering crashes
-                                            if (h.startsWith('_') || typeof row[h] === 'object') {
-                                                // Exception: We might want null objects to be empty string
-                                                if (row[h] === null) return <td key={h} className="px-4 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap"></td>;
-                                                
-                                                // Specific handling for known objects if needed, otherwise skip render
-                                                // But we must render a TD to keep alignment if 'h' is in headers
-                                                // If 'h' is in headers, it implies we expect a column.
-                                                // If this is an accidental object column, we should render something safe.
-                                                return (
-                                                    <td key={h} className="px-4 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap text-xs text-gray-400 font-mono">
-                                                        {JSON.stringify(row[h]).slice(0, 20)}...
-                                                    </td>
-                                                );
-                                            }
-
-                                            return (
-                                            <td key={h} className="px-4 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap relative group">
-                                                {row[h]}
-                                                {h === "ORDERQTY" && row._upsell && (
-                                                    <div className="absolute top-1 right-1 cursor-help group/icon">
-                                                        {/* <span className="text-lg" title={row._upsell.message}>💡</span> */}
-                                                        {/* Simple Tooltip */}
-                                                        <div className="absolute z-10 hidden group-hover/icon:block bg-black text-white text-xs px-2 py-1 rounded -top-8 left-1/2 -translate-x-1/2 w-48 text-center shadow-lg">
-                                                            {/* {row._upsell.message} */}
-                                                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-black"></div>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </td>
-                                        )})} 
-                                    </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                    <div className="p-3 border-t border-gray-200 bg-gray-50 text-center">
-                        <button 
-                            onClick={() => navigate(`/edit-orders/${id}`)}
-                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                        >
-                            View Full File & Edit
-                        </button>
-                    </div>
-                </Card>
-            )}
-
-{success && data.schemeDetails && data.schemeDetails.length > 0 && (
-  <Card>
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold flex items-center gap-2">
-          <span className="text-yellow-600">🎁</span>
-          Scheme Products ({data.schemeDetails.length})
-        </h3>
-        <span className="text-xs text-neutral-500">Auto-calculated from order quantities</span>
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-yellow-50 border-b">
-            <tr>
-              <th className="px-3 py-2 text-left font-medium text-neutral-700">Product</th>
-              <th className="px-3 py-2 text-center font-medium text-neutral-700">Order Qty</th>
-              <th className="px-3 py-2 text-center font-medium text-neutral-700">Free Qty</th>
-              <th className="px-3 py-2 text-center font-medium text-neutral-700 bg-green-50">Total (Order+Free)</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {data.schemeDetails.map((row, i) => {
-              const orderQty = row.orderQty || 0;
-              const freeQty = row.freeQty || 0;
-              return (
-                <tr key={i} className="hover:bg-yellow-50/50">
-                  <td className="px-3 py-2">
-                    <p className="font-medium">{row.productName}</p>
-                    <p className="text-xs text-neutral-500">{row.productCode}</p>
-                  </td>
-                  <td className="px-3 py-2 text-center">{orderQty}</td>
-                  <td className="px-3 py-2 text-center">
-                    <span className="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 font-medium rounded">
-                      +{freeQty}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-center bg-green-50">
-                    <span className="font-bold text-green-700">{orderQty}+{freeQty}</span>
-                    <p className="text-xs text-neutral-500">= {orderQty + freeQty} total</p>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </Card>
-)}
-
-      {/* TEMPLATE INFO
       {success && (
+        <PreviewTable
+          previewData={previewData}
+          previewHeaders={previewHeaders}
+          schemeDetails={data.schemeDetails}
+          id={id!}
+          onViewFull={() => navigate(`/edit-orders/${id}`)}
+        />
+      )}
+
+      {success && data.schemeDetails && data.schemeDetails.length > 0 && (
         <Card>
-          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <div className="flex items-start gap-3">
-              <CheckCircle className="w-5 h-5 text-blue-600 mt-0.5" />
-              <div>
-                <p className="font-medium text-blue-900 mb-1">
-                  Template Format
-                </p>
-                <p className="text-sm text-blue-800">
-                  Your file has been converted to the pharmaceutical training template with columns: 
-                  <strong> CODE | CUSTOMER NAME | SAPCODE | ITEMDESC | ORDERQTY | BOX PACK | PACK | DVN</strong>
-                </p>
-              </div>
+          <div className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold flex items-center gap-2">
+                <span className="text-yellow-600">🎁</span>
+                Scheme Products ({data.schemeDetails.length})
+              </h3>
+              <span className="text-xs text-neutral-500">
+                Auto-calculated from order quantities
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-yellow-50 border-b">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium text-neutral-700">
+                      Product
+                    </th>
+                    <th className="px-3 py-2 text-center font-medium text-neutral-700">
+                      Order Qty
+                    </th>
+                    <th className="px-3 py-2 text-center font-medium text-neutral-700">
+                      Free Qty
+                    </th>
+                    <th className="px-3 py-2 text-center font-medium text-neutral-700 bg-green-50">
+                      Total (Order+Free)
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {data.schemeDetails.map((row, i) => {
+                    const orderQty = row.orderQty || 0;
+                    const freeQty = row.freeQty || 0;
+                    return (
+                      <tr key={i} className="hover:bg-yellow-50/50">
+                        <td className="px-3 py-2">
+                          <p className="font-medium">{row.productName}</p>
+                          <p className="text-xs text-neutral-500">
+                            {row.productCode}
+                          </p>
+                        </td>
+                        <td className="px-3 py-2 text-center">{orderQty}</td>
+                        <td className="px-3 py-2 text-center">
+                          <span className="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 font-medium rounded">
+                            +{freeQty}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-center bg-green-50">
+                          <span className="font-bold text-green-700">
+                            {orderQty}+{freeQty}
+                          </span>
+                          <p className="text-xs text-neutral-500">
+                            = {orderQty + freeQty} total
+                          </p>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         </Card>
-      )} */}
+      )}
 
       {/* WARNINGS TABLE */}
       {warningRows.length > 0 && (
@@ -583,15 +412,15 @@ export function ResultPage() {
           </div>
 
           <div className="flex gap-3 w-full sm:w-auto">
-            <Button 
-              variant="secondary" 
+            <Button
+              variant="secondary"
               onClick={() => navigate("/history")}
               className="flex-1 sm:flex-auto"
             >
               View History
             </Button>
-            <Button 
-              variant="primary" 
+            <Button
+              variant="primary"
               onClick={() => navigate("/upload")}
               className="flex-1 sm:flex-auto"
             >
@@ -600,21 +429,21 @@ export function ResultPage() {
           </div>
         </div>
       </Card>
+
       <SchemeSelectionModal
-  open={schemeModalOpen}
-  onClose={() => setSchemeModalOpen(false)}
-  product={{
-    sapCode: activeSchemeRow?.SAPCODE,
-    name: activeSchemeRow?.ITEMDESC,
-    orderedQty: activeSchemeRow?.ORDERQTY
-  }}
-  schemes={activeSchemeRow?._availableSchemes || []}
-  onApply={(scheme) => {
-    console.log("Selected scheme:", scheme);
-    // 👉 call backend /apply-scheme here
-    setSchemeModalOpen(false);
-  }}
-/>
+        open={schemeModalOpen}
+        onClose={() => setSchemeModalOpen(false)}
+        product={{
+          sapCode: activeSchemeRow?.SAPCODE,
+          name: activeSchemeRow?.ITEMDESC,
+          orderedQty: activeSchemeRow?.ORDERQTY,
+        }}
+        schemes={activeSchemeRow?._availableSchemes || []}
+        onApply={(scheme) => {
+          console.log("Selected scheme:", scheme);
+          setSchemeModalOpen(false);
+        }}
+      />
 
       {/* Edit Converted Orders Modal */}
       {editingConverted && id && (
@@ -634,15 +463,17 @@ export function ResultPage() {
           uploadId={id}
           fileName={data?.fileName}
           onSave={(updatedData) => {
-            // 🔥 Update scheme data in parent state to refresh the table
-            setData(prev => prev ? {
-              ...prev,
-              schemeDetails: updatedData
-            } : prev);
+            setData((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    schemeDetails: updatedData,
+                  }
+                : prev
+            );
           }}
         />
       )}
-
     </div>
   );
 }
