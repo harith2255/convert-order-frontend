@@ -656,7 +656,6 @@ const formatProductDisplay = (p: any) => {
   const normalizeTokens = (text = "") =>
     text
       .toUpperCase()
-      .replace(/MG|ML|MCG/g, "")
       .replace(/[^A-Z0-9]/g, " ")
       .split(/\s+/)
       .filter(Boolean);
