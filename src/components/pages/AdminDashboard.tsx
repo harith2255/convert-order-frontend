@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchAdminDashboard } from "../../services/adminDashboardApi";
+
 import { toast } from "sonner";
 
 import {
@@ -12,7 +12,7 @@ import {
   Activity,
   FileText,
   CheckCircle,
-  Upload
+  Upload,
 } from "lucide-react";
 
 import { Card } from "../Card";
@@ -20,7 +20,7 @@ import { Button } from "../Button";
 import { StatCard } from "../StatCard";
 import { Table } from "../Table";
 import { Badge } from "../Badge";
-import api, { getUploadResult } from "../../services/api";
+import api from "../../services/api";
 
 interface AdminDashboardProps {
   onNavigate: (page: string) => void;
@@ -51,9 +51,10 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
   const [pagination, setPagination] = useState<any>(null);
 
   // ✅ NEW: Modal State
-  const [selectedUpload, setSelectedUpload] = useState<any>(null);
-  const [showModal, setShowModal] = useState(false);
-  const [isLoadingResult, setIsLoadingResult] = useState(false);
+  // Modal logic replaced by direct navigation to ResultPage
+  
+  // Modal Filter State
+
 
   // ✅ NEW - Update to new endpoints
   const loadDashboard = async () => {
@@ -78,29 +79,12 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
   };
 
   // ✅ Handle Row Click
-  const handleUploadClick = async (upload: any) => {
+  const handleUploadClick = (upload: any) => {
     if(!upload.id) return;
-    
-    try {
-      setIsLoadingResult(true);
-      // Open modal immediately to show loading state if desired, or wait
-      setShowModal(true); 
-      const response = await getUploadResult(upload.id);
-      
-      if (response.success) {
-        setSelectedUpload(response.data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch result", error);
-      toast.error("Could not load upload details.");
-      setShowModal(false);
-    } finally {
-      setIsLoadingResult(false);
-    }
+    navigate(`/result/${upload.id}`);
   };
 
   const loadUploads = async (pageNo = 1) => {
-    // Use the new OrderUpload endpoint
     const res = await api.get("/admin/master/audits", {
       params: { page: pageNo, limit: 10 },
     });
@@ -117,17 +101,16 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
       }))
     );
 
-    // Pagination Fix
     const p = res.data.pagination;
     setPagination({
       ...p,
-      hasPrev: p.page > 1,
-      hasNext: p.page < p.totalPages
+      hasPrev: Number(p.page) > 1,
+      hasNext: Number(p.page) < Number(p.totalPages)
     });
     setPage(pageNo);
   };
 
-  // Export button - update to new endpoint
+  // Export button
   const handleExport = async () => {
     try {
       setExporting(true);
@@ -157,7 +140,6 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
     }
   };
 
-  // ✅ Load data on mount
   useEffect(() => {
     loadDashboard();
     loadUploads(1);
@@ -202,20 +184,6 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
     { key: "time", label: "Uploaded At" },
   ];
 
-  const activityColumns = [
-    { key: "user", label: "User" },
-    { key: "action", label: "Action" },
-    {
-      key: "status",
-      label: "Status",
-      render: (value: string) => (
-        <Badge variant={value === "Success" ? "success" : "error"}>
-          {value}
-        </Badge>
-      ),
-    },
-    { key: "time", label: "Time" },
-  ];
 
 
   return (
@@ -241,13 +209,11 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
           value={stats?.totalUploads ?? 0}
           icon={FileText}
         />
-
         <StatCard
           title="Failed Uploads"
           value={stats?.failedUploads ?? 0}
           icon={AlertTriangle}
         />
-
         <StatCard
           title="Success Rate"
           value={`${stats?.successRate ?? 0}%`}
@@ -260,7 +226,6 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
         />
       </div>
 
-      {/* Master Data Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard title="Total Customers" value={stats?.customers ?? 0} icon={Users} />
         <StatCard title="Total Products" value={stats?.products ?? 0} icon={Database} />
@@ -305,85 +270,7 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
         </div>
       </Card>
 
-      {/* ✅ RESULT MODAL */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
-            
-            {/* Header */}
-            <div className="p-4 border-b flex justify-between items-center bg-gray-50">
-              <h3 className="font-bold text-lg">
-                {selectedUpload ? `Result: ${selectedUpload.fileName}` : "Loading..."}
-              </h3>
-              <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-gray-700 font-bold text-xl">✕</button>
-            </div>
 
-            {/* Body */}
-            <div className="p-6 overflow-auto bg-gray-50/50">
-              {isLoadingResult || !selectedUpload ? (
-                <div className="flex justify-center py-12">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-                </div>
-              ) : (
-                <>
-                  {/* Stats */}
-                  <div className="grid grid-cols-3 gap-4 mb-6">
-                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                      <div className="text-xs text-blue-500 uppercase font-semibold mb-1">Processed</div>
-                      <div className="text-2xl font-bold text-blue-700">{selectedUpload.stats.processed} <span className="text-sm font-normal text-blue-600">Items</span></div>
-                    </div>
-                    <div className="bg-green-50 p-4 rounded-lg border border-green-100">
-                      <div className="text-xs text-green-500 uppercase font-semibold mb-1">Schemes Applied</div>
-                      <div className="text-2xl font-bold text-green-700">{selectedUpload.stats.schemeCount}</div>
-                    </div>
-                    <div className="bg-red-50 p-4 rounded-lg border border-red-100">
-                      <div className="text-xs text-red-500 uppercase font-semibold mb-1">Failed</div>
-                      <div className="text-2xl font-bold text-red-700">{selectedUpload.stats.failed} <span className="text-sm font-normal text-red-600">Items</span></div>
-                    </div>
-                  </div>
-
-                  {/* Data Table */}
-                  <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-gray-100 uppercase text-xs font-semibold text-gray-600">
-                        <tr>
-                          <th className="px-4 py-3 border-b">Item Name (Input)</th>
-                          <th className="px-4 py-3 border-b">Matched As</th>
-                          <th className="px-4 py-3 border-b w-24">Qty</th>
-                          <th className="px-4 py-3 border-b w-32">Free Qty</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {selectedUpload.result?.rows?.slice(0, 500).map((row: any, i: number) => (
-                          <tr key={i} className="hover:bg-gray-50/50">
-                            <td className="px-4 py-2 border-r text-gray-700">{row.ITEMDESC || row["Item Description"]}</td>
-                            <td className="px-4 py-2 border-r font-medium text-gray-900">{row.MATCHED_PRODUCT || "-"}</td>
-                            <td className="px-4 py-2 border-r text-center">{row.ORDERQTY || row.Qty}</td>
-                            <td className={`px-4 py-2 text-center font-bold ${row.FREEQTY > 0 ? "text-green-600" : "text-gray-400"}`}>
-                              {row.FREEQTY || 0}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    
-                    <div className="p-3 bg-gray-50 border-t text-center text-xs text-gray-500">
-                      Showing first 500 rows.
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="p-4 border-t bg-gray-50 flex justify-end">
-              <Button variant="secondary" size="sm" onClick={() => setShowModal(false)}>
-                Close
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

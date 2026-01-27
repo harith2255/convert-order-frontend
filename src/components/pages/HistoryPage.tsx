@@ -73,7 +73,12 @@ export function HistoryPage() {
       
       // Update pagination meta
       if (res.data?.pagination) {
-        setPagination(res.data.pagination);
+        const p = res.data.pagination;
+        setPagination({
+            ...p,
+            hasPrev: Number(p.page) > 1,
+            hasNext: Number(p.page) < Number(p.totalPages)
+        });
       }
       
       // ✅ Correctly update stats from backend global counts
