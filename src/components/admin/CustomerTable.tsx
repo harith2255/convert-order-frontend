@@ -279,228 +279,213 @@ export function CustomerTable() {
           </>
         }
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
-          {/* Basic Info */}
-          <div className="md:col-span-2 text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-0.5">
-            Basic Information
-          </div>
-
-          <div className="space-y-0.5">
-            <label className="block text-[11px] font-semibold text-neutral-600 ml-1">
-              Customer Code <span className="text-red-500">*</span>
-            </label>
-            <Input
-              value={formData.customerCode || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, customerCode: e.target.value })
-              }
-              disabled={viewMode || !!editingCustomer}
-              placeholder="e.g., C5001"
-              className="bg-neutral-50 h-9 text-sm"
-            />
-          </div>
-
-          <div className="space-y-0.5">
-            <label className="block text-[11px] font-semibold text-neutral-600 ml-1">
-              Customer Type
-            </label>
-            <Input
-              value={formData.customerType || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, customerType: e.target.value })
-              }
-              disabled={viewMode}
-              placeholder="e.g., Stockiest"
-              className="bg-neutral-50 h-9 text-sm"
-            />
-          </div>
-
-          <div className="md:col-span-2 space-y-0.5">
-            <label className="block text-[11px] font-semibold text-neutral-600 ml-1">
-              Customer Name <span className="text-red-500">*</span>
-            </label>
-            <Input
-              value={formData.customerName || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, customerName: e.target.value })
-              }
-              disabled={viewMode}
-              placeholder="Enter full customer name"
-              className="bg-neutral-50 h-9 text-sm"
-            />
-          </div>
-
-          {/* Address */}
-          <div className="md:col-span-2 text-[10px] font-bold text-neutral-400 uppercase tracking-wider mt-2 mb-0.5">
-            Location & Contact
-          </div>
-
-          <div className="md:col-span-2 space-y-0.5">
-            <label className="block text-[11px] font-semibold text-neutral-600 ml-1">
-              Address
-            </label>
-            <div className="space-y-1.5">
-              <Input
-                value={formData.address1 || ""}
-                onChange={(e) =>
-                  setFormData({ ...formData, address1: e.target.value })
-                }
-                disabled={viewMode}
-                placeholder="Line 1"
-                className="bg-neutral-50 h-9 text-sm"
-              />
-              <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-6 p-1">
+          {/* Basic Information */}
+          <div>
+            <h4 className="text-sm font-medium text-neutral-900 mb-3 border-b pb-1">Basic Information</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-neutral-700">
+                  Customer Code <span className="text-red-500">*</span>
+                </label>
                 <Input
-                  value={formData.address2 || ""}
+                  value={formData.customerCode || ""}
                   onChange={(e) =>
-                    setFormData({ ...formData, address2: e.target.value })
+                    setFormData({ ...formData, customerCode: e.target.value })
                   }
-                  disabled={viewMode}
-                  placeholder="Line 2"
-                  className="bg-neutral-50 h-9 text-sm"
+                  disabled={viewMode || !!editingCustomer}
+                  placeholder="e.g., C5001"
                 />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-neutral-700">
+                  Customer Type
+                </label>
                 <Input
-                  value={formData.address3 || ""}
+                  value={formData.customerType || ""}
                   onChange={(e) =>
-                    setFormData({ ...formData, address3: e.target.value })
+                    setFormData({ ...formData, customerType: e.target.value })
                   }
                   disabled={viewMode}
-                  placeholder="Line 3"
-                  className="bg-neutral-50 h-9 text-sm"
+                  placeholder="e.g., Stockiest"
+                />
+              </div>
+
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-sm font-medium text-neutral-700">
+                  Customer Name <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  value={formData.customerName || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, customerName: e.target.value })
+                  }
+                  disabled={viewMode}
+                  placeholder="Enter full customer name"
                 />
               </div>
             </div>
           </div>
 
-          <div className="space-y-0.5">
-            <label className="block text-[11px] font-semibold text-neutral-600 ml-1">City</label>
-            <Input
-              value={formData.city || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, city: e.target.value })
-              }
-              disabled={viewMode}
-              className="bg-neutral-50 h-9 text-sm"
-            />
-          </div>
+          {/* Location & Contact */}
+          <div>
+            <h4 className="text-sm font-medium text-neutral-900 mb-3 border-b pb-1">Location & Contact</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-sm font-medium text-neutral-700">
+                  Address
+                </label>
+                <Input
+                  value={formData.address1 || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, address1: e.target.value })
+                  }
+                  disabled={viewMode}
+                  placeholder="Address Line 1"
+                  className="mb-2"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    value={formData.address2 || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, address2: e.target.value })
+                    }
+                    disabled={viewMode}
+                    placeholder="Address Line 2"
+                  />
+                  <Input
+                    value={formData.address3 || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, address3: e.target.value })
+                    }
+                    disabled={viewMode}
+                    placeholder="Address Line 3"
+                  />
+                </div>
+              </div>
 
-          <div className="space-y-0.5">
-            <label className="block text-[11px] font-semibold text-neutral-600 ml-1">State</label>
-            <Input
-              value={formData.state || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, state: e.target.value })
-              }
-              disabled={viewMode}
-              className="bg-neutral-50 h-9 text-sm"
-            />
-          </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-neutral-700">City</label>
+                <Input
+                  value={formData.city || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, city: e.target.value })
+                  }
+                  disabled={viewMode}
+                />
+              </div>
 
-          <div className="space-y-0.5">
-            <label className="block text-[11px] font-semibold text-neutral-600 ml-1"> Pin Code</label>
-            <Input
-              value={formData.pinCode || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, pinCode: e.target.value })
-              }
-              disabled={viewMode}
-              className="bg-neutral-50 h-9 text-sm"
-            />
-          </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-neutral-700">State</label>
+                <Input
+                  value={formData.state || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, state: e.target.value })
+                  }
+                  disabled={viewMode}
+                />
+              </div>
 
-          <div className="space-y-0.5">
-            <label className="block text-[11px] font-semibold text-neutral-600 ml-1">Email</label>
-            <Input
-              type="email"
-              value={formData.email || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, email: e.target.value })
-              }
-              disabled={viewMode}
-              className="bg-neutral-50 h-9 text-sm"
-              placeholder="example@mail.com"
-            />
-          </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-neutral-700">Pin Code</label>
+                <Input
+                  value={formData.pinCode || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, pinCode: e.target.value })
+                  }
+                  disabled={viewMode}
+                />
+              </div>
 
-          <div className="space-y-0.5">
-            <label className="block text-[11px] font-semibold text-neutral-600 ml-1">Phone</label>
-            <Input
-              value={formData.phoneNo1 || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, phoneNo1: e.target.value })
-              }
-              disabled={viewMode}
-              className="bg-neutral-50 h-9 text-sm"
-            />
-          </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-neutral-700">Email</label>
+                <Input
+                  type="email"
+                  value={formData.email || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, email: e.target.value })
+                  }
+                  disabled={viewMode}
+                  placeholder="example@mail.com"
+                />
+              </div>
 
-          <div className="space-y-0.5">
-            <label className="block text-[11px] font-semibold text-neutral-600 ml-1">Mobile</label>
-            <Input
-              value={formData.mobileNo || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, mobileNo: e.target.value })
-              }
-              disabled={viewMode}
-              className="bg-neutral-50 h-9 text-sm"
-            />
-          </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-neutral-700">Phone</label>
+                <Input
+                  value={formData.phoneNo1 || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, phoneNo1: e.target.value })
+                  }
+                  disabled={viewMode}
+                />
+              </div>
 
-          {/* License Info */}
-          <div className="md:col-span-2 text-[10px] font-bold text-neutral-400 uppercase tracking-wider mt-2 mb-0.5">
-            Legal & Licenses
-          </div>
-
-          <div className="space-y-0.5">
-            <label className="block text-[11px] font-semibold text-neutral-600 ml-1"> Drug License 1</label>
-            <Input
-              value={formData.drugLicNo || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, drugLicNo: e.target.value })
-              }
-              disabled={viewMode}
-              placeholder="License Number"
-              className="bg-neutral-50 h-9 text-sm"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-0.5">
-              <label className="block text-[9px] font-bold text-neutral-400 ml-1 uppercase leading-none">Valid From</label>
-              <Input
-                value={formData.drugLicFromDt || ""}
-                onChange={(e) =>
-                  setFormData({ ...formData, drugLicFromDt: e.target.value })
-                }
-                disabled={viewMode}
-                placeholder="DD/MM/YYYY"
-                className="bg-neutral-50 h-9 text-sm"
-              />
-            </div>
-            <div className="space-y-0.5">
-              <label className="block text-[9px] font-bold text-neutral-400 ml-1 uppercase leading-none">Valid To</label>
-              <Input
-                value={formData.drugLicToDt || ""}
-                onChange={(e) =>
-                  setFormData({ ...formData, drugLicToDt: e.target.value })
-                }
-                disabled={viewMode}
-                placeholder="DD/MM/YYYY"
-                className="bg-neutral-50 h-9 text-sm"
-              />
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-neutral-700">Mobile</label>
+                <Input
+                  value={formData.mobileNo || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, mobileNo: e.target.value })
+                  }
+                  disabled={viewMode}
+                />
+              </div>
             </div>
           </div>
 
-          <div className="space-y-0.5">
-            <label className="block text-[11px] font-semibold text-neutral-600 ml-1">GST Number</label>
-            <Input
-              value={formData.gstNo || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, gstNo: e.target.value })
-              }
-              disabled={viewMode}
-              className="bg-neutral-50 h-9 text-sm"
-            />
+          {/* Legal & Licenses */}
+          <div>
+            <h4 className="text-sm font-medium text-neutral-900 mb-3 border-b pb-1">Legal & Licenses</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-sm font-medium text-neutral-700">Drug License 1</label>
+                <Input
+                  value={formData.drugLicNo || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, drugLicNo: e.target.value })
+                  }
+                  disabled={viewMode}
+                  placeholder="License Number"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-neutral-700">Valid From</label>
+                <Input
+                  type="date"
+                  value={formData.drugLicFromDt ? new Date(formData.drugLicFromDt).toISOString().split('T')[0] : ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, drugLicFromDt: e.target.value })
+                  }
+                  disabled={viewMode}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-neutral-700">Valid To</label>
+                <Input
+                  type="date"
+                  value={formData.drugLicToDt ? new Date(formData.drugLicToDt).toISOString().split('T')[0] : ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, drugLicToDt: e.target.value })
+                  }
+                  disabled={viewMode}
+                />
+              </div>
+
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-sm font-medium text-neutral-700">GST Number</label>
+                <Input
+                  value={formData.gstNo || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, gstNo: e.target.value })
+                  }
+                  disabled={viewMode}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </CustomModal>
