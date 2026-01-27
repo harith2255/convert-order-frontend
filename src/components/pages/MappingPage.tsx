@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import api from "../../services/api";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Modal } from "../Modal";
+import { SchemePopup } from "../modals/SchemePopup";
 
 export function MappingPage() {
   const navigate = useNavigate();
@@ -666,16 +667,33 @@ const formatProductDisplay = (p: any) => {
 
   if (invTokens.length === 0) return false;
 
-  // ✅ order-independent match
-  const matchProduct = invTokens.every(t => prodTokens.includes(t));
+  // ✅ order-independent match (Input subset of Product)
+  const matchForward = invTokens.every(t => prodTokens.includes(t));
+  
+  // ✅ REVERSE match (Product subset of Input) - Fixes "MICROCID 25" -> "MICROCID"
+  // Requires at least a significant overlap (e.g. at least one token matched)
+  const matchBackward = prodTokens.length > 0 && prodTokens.every(t => invTokens.includes(t));
+
   const matchBase =
     baseTokens.length > 0 &&
     invTokens.every(t => baseTokens.includes(t));
 
-  return matchProduct || matchBase;
+  // ✅ BRAND/ROOT Match - Show all variants if the main brand matches
+  // e.g. Input: "MICROCID 25", Product: "MICROCID 50" -> Match on "MICROCID"
+  const matchBrand = invTokens.some(t => 
+    t.length >= 3 &&           // Must be a significant word
+    isNaN(Number(t)) &&        // Not a number
+    prodTokens.includes(t)     // Exists in product
+  );
+
+  return matchForward || matchBackward || matchBase || matchBrand;
 })
 
-                                  .slice(0, 10)
+                                  .sort((a, b) => {
+                                      // Optional: Prioritize exact matches (forward/backward) over just brand matches
+                                      return 0; // Keep default order for now
+                                  })
+                                  .slice(0, 50)
                                   .map(p => (
                                     <button
                                       key={p._id}
@@ -706,7 +724,7 @@ const formatProductDisplay = (p: any) => {
                                                   updated[i] = { ...updated[i], availableSchemes: res.data.schemes };
                                                   return updated;
                                                 });
-                                                toast.success(`⚡ ${res.data.schemes.length} schemes found for ${p.productName}`);
+                                                // Toast removed as per user request
                                               }
                                             });
                                           }
@@ -758,28 +776,7 @@ const formatProductDisplay = (p: any) => {
                           </div>
                         )}
 
-                        {/* SCHEME BADGES */}
-                        {row.matchedProduct && row.availableSchemes?.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
-                            {row.availableSchemes.map((s: any, idx: number) => (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={() => {
-                                  handleRowChange(i, "ORDERQTY", s.minQty);
-                                  toast.success(`Applied scheme: Buy ${s.minQty} get ${s.freeQty} free`);
-                                }}
-                                className="flex items-center gap-1.5 text-xs bg-amber-100 hover:bg-amber-200 text-amber-800 px-2.5 py-1.5 rounded border border-amber-300 transition-colors"
-                                title={`Click to set quantity to ${s.minQty}`}
-                              >
-                                <Gift className="w-3 h-3" />
-                                <span className="font-medium">
-                                  {s.minQty} + {s.freeQty}
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                        {/* Scheme badges removed as per user request (handled in separate modal) */}
                       </div>
                     </td>
 
@@ -904,79 +901,26 @@ const formatProductDisplay = (p: any) => {
         </div>
       </Card>
 
-       {/* 🎁 SCHEME SUGGESTION MODAL */}
-        {showSchemeModal && (
-        <Modal
-        className="max-w-[600px] rounded-lg shadow-lg overflow-auto "
-            isOpen={showSchemeModal} 
+       {/* 🎁 SCHEME POPUP MODAL (Portal Based) */}
+        <SchemePopup
+            isOpen={showSchemeModal}
             onClose={() => {
                 setShowSchemeModal(false);
                 setSchemeSuggestions([]);
             }}
-            title="🎁 Scheme Opportunities Detected!"
-            size="md"
-            footer={
-              <>
-                    <Button 
-                        variant="secondary" 
-                        onClick={() => {
-                            setShowSchemeModal(false);
-                            // Proceed with conversion using original values
-                            handleConvert(true); 
-                        }}
-                    >
-                        Skip & Convert
-                    </Button>
-                    <Button 
-                        variant="primary"
-                        onClick={() => {
-                            setShowSchemeModal(false);
-                            // Proceed with conversion using UPDATED values
-                            handleConvert(true); 
-                        }}
-                    >
-                        Done & Convert
-                    </Button>
-              </>
-            }
-        >
-            <div className="space-y-4">
-                <Alert variant="info">
-                    <AlertDescription>
-                        We found products where increasing the quantity slightly will unlock free goods.
-                    </AlertDescription>
-                </Alert>
+            suggestions={schemeSuggestions}
+            onApply={applySchemeSuggestion}
+            onSkip={() => {
+                setShowSchemeModal(false);
+                handleConvert(true);
+            }}
+            onDone={() => {
+                setShowSchemeModal(false);
+                handleConvert(true);
+            }}
+        />
 
-                <div className="space-y-3">
-                    {schemeSuggestions.map((s, idx) => (
-                        <div key={idx} className="border p-3 rounded bg-amber-50 border-amber-200">
-                             <div className="font-medium text-sm text-gray-800">{s.itemDesc}</div>
-                             <div className="text-xs text-gray-500 mb-2">Code: {s.productCode}</div>
-                             
-                             <div className="flex items-center justify-between mt-2">
-                                <div className="text-sm">
-                                    Current: <strong>{s.currentQty}</strong>
-                                    <span className="mx-2 text-gray-400">→</span>
-                                    Target: <strong className="text-green-700">{s.suggestedQty}</strong>
-                                </div>
-                                <div className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                                    Get {s.freeQty} Free
-                                </div>
-                             </div>
-
-                             <Button 
-                                size="sm" 
-                                className="w-full mt-3 bg-blue-500 text-white border border-blue-200"
-                                onClick={() => applySchemeSuggestion(s)}
-                            >
-                                Upgrade to {s.suggestedQty} (+{s.freeQty} FREE)
-                            </Button>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </Modal>
-       )}
+       
 
     </div>
   );
