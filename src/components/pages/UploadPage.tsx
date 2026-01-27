@@ -174,7 +174,7 @@ const handleContinue = async () => {
       {/* Upload Instructions */}
       <Alert variant="info">
         <AlertCircle className="w-5 h-5 flex-shrink-0" />
-        <div>
+        <div className='p-2'>
           <AlertTitle className="mb-1">Supported File Formats</AlertTitle>
           <AlertDescription>
             Excel (.xlsx, .xls), CSV (.csv), PDF (.pdf), and Text (.txt) files are supported. Maximum file size: 10MB per file.

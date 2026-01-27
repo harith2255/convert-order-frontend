@@ -249,14 +249,14 @@ export function ResultPage() {
       </div>
 
       <Card>
-        <div className="p-6 flex items-start justify-between">
-           <div className="flex items-center gap-4">
+        <div className="p-4 sm:p-6 flex flex-col sm:flex-row items-start justify-between gap-6 sm:gap-0">
+           <div className="flex items-center gap-4 w-full sm:w-auto">
                {success ? (
-                  <div className="bg-green-100 p-3 rounded-full">
+                  <div className="bg-green-100 p-3 rounded-full flex-shrink-0">
                      <CheckCircle2 className="w-8 h-8 text-green-600" />
                   </div>
                ) : (
-                  <div className="bg-red-100 p-3 rounded-full">
+                  <div className="bg-red-100 p-3 rounded-full flex-shrink-0">
                      <XCircle className="w-8 h-8 text-red-600" />
                   </div>
                )}
@@ -264,18 +264,18 @@ export function ResultPage() {
                   <h2 className="text-xl font-bold">
                      {success ? "Conversion Successful" : "Conversion Failed"}
                   </h2>
-                  <div className="flex gap-4 mt-1 text-sm text-neutral-600">
+                  <div className="flex flex-wrap gap-4 mt-1 text-sm text-neutral-600">
                       <span>Processed: <strong>{data.successRows + errorRows.length}</strong> rows</span>
                       <span className="flex items-center gap-1"><RefreshCw className="w-3 h-3"/> {data.processingTime}</span>
                   </div>
                </div>
            </div>
 
-           <div className="flex flex-col items-end gap-4">
+           <div className="flex flex-col items-start sm:items-end gap-4 w-full sm:w-auto mt-4 sm:mt-0">
 
 
             {success && (
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                 
                 {/* DYNAMIC DOWNLOAD BUTTONS */}
                 {data.downloadUrls && data.downloadUrls.length > 0 ? (
@@ -285,7 +285,7 @@ export function ResultPage() {
                       variant="primary"
                       onClick={() => handleDownload(dl.type)}
                       disabled={!!downloadingType}
-                      className="inline-flex items-center gap-2"
+                      className="inline-flex items-center justify-center gap-2 w-full sm:w-auto"
                     >
                       {downloadingType === dl.type ? (
                         <>
@@ -307,7 +307,7 @@ export function ResultPage() {
                     variant="primary"
                     onClick={() => handleDownload('single')}
                     disabled={!!downloadingType}
-                    className="inline-flex items-center gap-2"
+                    className="inline-flex items-center justify-center gap-2 w-full sm:w-auto"
                   >
                     {downloadingType ? (
                       <>
@@ -324,12 +324,12 @@ export function ResultPage() {
                 )}
 
                 {/* Division Report Section */}
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
                     {divisions.length > 0 && (
                         <select 
                             value={selectedDivision}
                             onChange={(e) => setSelectedDivision(e.target.value)}
-                            className="text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50 h-9 bg-white"
+                            className="text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50 h-9 bg-white w-full sm:w-auto"
                         >
                             <option value="">All Divisions</option>
                             {divisions.map(d => (
@@ -343,7 +343,7 @@ export function ResultPage() {
                         variant="secondary"
                         onClick={handleDivisionDownload}
                         disabled={!!downloadingType}
-                        className="inline-flex items-center gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 bg-white"
+                        className="inline-flex items-center justify-center gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 bg-white w-full sm:w-auto"
                     >
                         {downloadingType === 'division' ? (
                             <>
@@ -363,7 +363,7 @@ export function ResultPage() {
           </div>
 
           {success && (
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0 hidden sm:block">
               <FileSpreadsheet className="w-16 h-16 text-green-600" />
             </div>
           )}
@@ -567,7 +567,7 @@ export function ResultPage() {
 
       {/* ACTION BUTTONS */}
       <Card>
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col sm:flex-row justify-between items-center p-4 gap-4 sm:gap-0">
           <div className="text-sm text-neutral-600">
             {success ? (
               <>
@@ -582,16 +582,18 @@ export function ResultPage() {
             )}
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex gap-3 w-full sm:w-auto">
             <Button 
               variant="secondary" 
               onClick={() => navigate("/history")}
+              className="flex-1 sm:flex-auto"
             >
               View History
             </Button>
             <Button 
               variant="primary" 
               onClick={() => navigate("/upload")}
+              className="flex-1 sm:flex-auto"
             >
               {success ? "Upload Another File" : "Try Again"}
             </Button>
