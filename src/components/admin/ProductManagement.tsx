@@ -6,6 +6,7 @@ import { Card } from "../Card";
 import { Input } from "../Input";
 import { Trash2, Edit2, Plus, Eye } from "lucide-react";
 import { CustomModal } from "../Modal";
+import { Autocomplete } from "../Autocomplete";
 
 interface Product {
   _id: string;
@@ -16,6 +17,7 @@ interface Product {
   dosage?: string;
   variant?: string;
   division?: string;
+  boxPack?: number;
 }
 
 
@@ -26,6 +28,7 @@ export function ProductManagement() {
   const limit = 50; 
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [divisions, setDivisions] = useState<string[]>([]);
 
   // Edit/Create state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -34,6 +37,7 @@ export function ProductManagement() {
     productCode: "",
     productName: "",
     division: "",
+    boxPack: "",
   });
 
   const loadProducts = async () => {
@@ -50,6 +54,19 @@ export function ProductManagement() {
     }
   };
 
+  const loadDivisions = async () => {
+    try {
+      const data = await masterDataApi.getDivisions();
+      setDivisions(data);
+    } catch (error) {
+      console.error("Failed to load divisions");
+    }
+  };
+
+  useEffect(() => {
+    loadDivisions();
+  }, []);
+
   useEffect(() => {
     const t = setTimeout(() => {
       setPage(1);
@@ -63,7 +80,7 @@ export function ProductManagement() {
 
   const handleCreate = () => {
     setEditingProduct(null);
-    setFormData({ productCode: "", productName: "", division: "" });
+    setFormData({ productCode: "", productName: "", division: "", boxPack: "" });
     setIsModalOpen(true);
   };
 
@@ -73,6 +90,7 @@ export function ProductManagement() {
       productCode: product.productCode,
       productName: product.productName,
       division: product.division || "",
+      boxPack: product.boxPack ? product.boxPack.toString() : "",
     });
     setIsModalOpen(true);
   };
@@ -84,14 +102,18 @@ export function ProductManagement() {
         return;
       }
 
+      const payload = {
+        productName: formData.productName,
+        division: formData.division,
+        boxPack: formData.boxPack ? Number(formData.boxPack) : 0,
+        productCode: formData.productCode // Include productCode for creation
+      };
+
       if (editingProduct) {
-        await masterDataApi.updateProduct(editingProduct._id, {
-          productName: formData.productName,
-          division: formData.division,
-        });
+        await masterDataApi.updateProduct(editingProduct._id, payload);
         toast.success("Product updated");
       } else {
-        await masterDataApi.createProduct(formData);
+        await masterDataApi.createProduct(payload);
         toast.success("Product created");
       }
 
@@ -174,19 +196,20 @@ export function ProductManagement() {
               <th className="text-left p-2">Product Code</th>
               <th className="text-left p-2">Product Name</th>
               <th className="text-left p-2">Division</th>
+              <th className="text-left p-2">Box Pack</th>
               <th className="text-right p-2">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={4} className="text-center p-4">
+                <td colSpan={5} className="text-center p-4">
                   Loading...
                 </td>
               </tr>
             ) : products.length === 0 ? (
               <tr>
-                <td colSpan={4} className="text-center p-4 text-neutral-500">
+                <td colSpan={5} className="text-center p-4 text-neutral-500">
                   No products found
                 </td>
               </tr>
@@ -198,6 +221,7 @@ export function ProductManagement() {
                     {product.cleanedProductName || product.productName}
                   </td>
                   <td className="p-2">{product.division || "-"}</td>
+                  <td className="p-2">{product.boxPack || "-"}</td>
                   <td className="p-2 text-right">
                     <button
                       onClick={() => handleEdit(product)}
@@ -278,15 +302,28 @@ export function ProductManagement() {
           </div>
 
           <div>
+            <Autocomplete
+              label="Division"
+              options={divisions}
+              value={formData.division}
+              onChange={(val) =>
+                setFormData({ ...formData, division: val })
+              }
+              placeholder="Enter or select division"
+            />
+          </div>
+
+          <div>
             <label className="block text-sm font-medium mb-1 text-neutral-700">
-              Division
+              Box Pack
             </label>
             <Input
-              value={formData.division}
+              type="number"
+              value={formData.boxPack}
               onChange={(e) =>
-                setFormData({ ...formData, division: e.target.value })
+                setFormData({ ...formData, boxPack: e.target.value })
               }
-              placeholder="Enter division (optional)"
+              placeholder="Enter box pack (e.g. 10)"
             />
           </div>
         </div>

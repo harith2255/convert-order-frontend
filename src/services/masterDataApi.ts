@@ -63,13 +63,17 @@ export const masterDataApi = {
       link.href = url;
       link.download = `master-data-${Date.now()}.xlsx`;
       document.body.appendChild(link);
-      link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error("Export failed", err);
       throw err;
     }
+  },
+
+  async getDivisions() {
+    const res = await api.get<string[]>("/admin/master/divisions");
+    return res.data;
   },
 
   /* =====================================

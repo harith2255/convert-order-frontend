@@ -36,6 +36,60 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Modal } from "../Modal";
 import { SchemePopup } from "../modals/SchemePopup";
 
+/**
+ * 🧠 FRONTEND SCHEME ENGINE (Strict Mirror of Backend)
+ */
+const FrontendSchemeEngine = {
+    generateVirtualSlabs: (explicitSlabs: any[], orderQty: number) => {
+        const sorted = [...explicitSlabs].filter(s => s.minQty > 0).sort((a, b) => a.minQty - b.minQty);
+        if (sorted.length === 0) return [];
+
+        const base = sorted[0];
+        const baseQty = base.minQty;
+        const baseFree = base.freeQty;
+        
+        // Generate enough virtual slabs to cover the order + upsell room
+        const maxTarget = Math.max(orderQty * 2, baseQty * 10);
+        
+        const allSlabs = [];
+        let multiplier = 1;
+        let currentQty = baseQty;
+
+        while (currentQty <= maxTarget) {
+            const explicit = sorted.find(s => s.minQty === currentQty);
+            if (explicit) {
+                allSlabs.push({ ...explicit, isVirtual: false });
+            } else {
+                allSlabs.push({
+                    minQty: currentQty,
+                    freeQty: multiplier * baseFree,
+                    isVirtual: true,
+                    schemeName: `Auto-Pattern (x${multiplier})`,
+                    schemeId: base.schemeId || 'virtual'
+                });
+            }
+            multiplier++;
+            currentQty = baseQty * multiplier;
+        }
+        return allSlabs.sort((a, b) => a.minQty - b.minQty);
+    },
+
+    calculate: (orderQty: number, slabs: any[]) => {
+        if (orderQty <= 0 || !slabs.length) return { freeQty: 0, appliedSlab: null };
+        
+        // Find largest slab <= orderQty
+        const applicable = slabs.filter(s => s.minQty <= orderQty);
+        if (applicable.length === 0) return { freeQty: 0, appliedSlab: null };
+
+        const bestSlab = applicable[applicable.length - 1]; // Last one is largest
+        return {
+            freeQty: bestSlab.freeQty,
+            appliedSlab: bestSlab
+        };
+    }
+};
+
+
 export function MappingPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -78,22 +132,15 @@ export function MappingPage() {
 
   const formatProductDisplay = (p: any) => {
     if (!p) return "";
-
-    const reorderProductName = (name: string) => {
-      if (!name) return "";
-      const match = name.match(/^([A-Z\-]+)\s+(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)\s+([A-Z]+)$/i);
-      if (match) {
-        const [, brand, strength, variant] = match;
-        return `${brand} ${variant} ${strength}`;
-      }
-      return name;
-    };
-
-    const displayName = p.productName
-      ? reorderProductName(p.productName)
-      : [p.baseName, p.variant, p.dosage].filter(Boolean).join(" ");
-
-    return displayName.replace(/-/g, " ");
+    let name = p.productName || [p.baseName, p.variant, p.dosage].filter(Boolean).join(" ");
+    
+    // Fix specific DB data quality issues
+    // 1. "GM 1MG" -> "1GM" (e.g. DOLO- GM 1MG -> DOLO- 1GM)
+    if (name.includes("GM 1MG")) {
+      name = name.replace("GM 1MG", "1GM");
+    }
+    
+    return name;
   };
 
   const SHEET_COLORS = [
@@ -249,7 +296,14 @@ export function MappingPage() {
       const next = [...prev];
       let updatedRow = { ...next[index], [field]: value };
 
+      if (field === 'matchedProduct') {
+          updatedRow.availableSchemes = undefined; // Reset schemes so fetcher triggers
+          updatedRow.schemeApplied = false;
+      }
+
       if (field === 'ORDERQTY' || field === 'BOX PACK') {
+        if (field === 'ORDERQTY') updatedRow.schemeApplied = false; // Reset scheme status on manual edit
+        
         const qty = Number(field === 'ORDERQTY' ? value : updatedRow.ORDERQTY) || 0;
         const boxPack = Number(field === 'BOX PACK' ? value : (updatedRow["BOX PACK"] || updatedRow.matchedProduct?.boxPack)) || 0;
 
@@ -275,6 +329,81 @@ export function MappingPage() {
 
       return next;
     });
+  };
+
+  /* ---------------- FETCH SCHEMES FOR ROWS ---------------- */
+  useEffect(() => {
+    if (!selectedCustomer?.customerCode || rows.length === 0) return;
+
+    const fetchAllSchemes = async () => {
+        // Only fetch for rows that have a matched product but Schemes are UNDEFINED (not fetched yet)
+        const rowsToUpdate = rows.map((r, i) => ({ r, i }))
+             .filter(({ r }) => r.matchedProduct && r.availableSchemes === undefined);
+
+        if (rowsToUpdate.length === 0) return;
+        
+        // We do this individually to avoid a massive batch payload if many different products
+        const updates: Record<number, any[]> = {};
+
+        await Promise.all(rowsToUpdate.map(async ({ r, i }) => {
+            try {
+                const res = await api.get(`/orders/schemes/product/${r.matchedProduct.productCode}`, {
+                    params: { customerCode: selectedCustomer.customerCode, division: r.matchedProduct.division }
+                });
+                // Always set result, even if empty array, to prevent re-fetching
+                updates[i] = res.data?.schemes || [];
+            } catch (err) {
+                 updates[i] = []; // Set empty on error to prevent retry loop
+            }
+        }));
+        
+        if (Object.keys(updates).length > 0) {
+             setRows(prev => {
+                 const next = [...prev];
+                 Object.entries(updates).forEach(([index, schemes]) => {
+                     const idx = Number(index);
+                     if (next[idx]) {
+                         next[idx] = { ...next[idx], availableSchemes: schemes };
+                     }
+                 });
+                 return next;
+             });
+        }
+    };
+    
+    fetchAllSchemes();
+  }, [selectedCustomer?.customerCode, rows]); // Depend on rows to catch manual mapping changes
+
+  /* ---------------- CALCULATE SCHEME INFO ---------------- */
+  const getSchemeInfo = (row: any) => {
+      if (!row.availableSchemes || row.availableSchemes.length === 0) return null;
+      
+      const qty = Number(row.ORDERQTY) || 0;
+      
+      // 1. Get explicit slabs
+      // For now, assume first scheme is the relevant one (as per backend logic found)
+      // or flatten all slabs from all schemes? 
+      // The backend returns a list of schemes. We usually pick the best one.
+      // Let's use the first one available for simplicity or strict match.
+      const scheme = row.availableSchemes[0]; 
+      if (!scheme || !scheme.slabs) return null;
+
+      // 2. Generate Virtual Slabs using Engine
+      const allSlabs = FrontendSchemeEngine.generateVirtualSlabs(scheme.slabs, qty);
+      
+      // 3. Find Active Slab (Benefit already achieved)
+      const execution = FrontendSchemeEngine.calculate(qty, allSlabs);
+      const activeSlab = execution.appliedSlab;
+      
+      // 4. Find Next Slab (Upsell)
+      // Find the first slab strictly greater than current qty
+      const nextSlab = allSlabs.find(s => s.minQty > qty);
+      
+      return { 
+          active: activeSlab ? { ...activeSlab, totalFree: execution.freeQty } : null,
+          next: nextSlab,
+          all: allSlabs 
+      };
   };
 
   /* 📋 SHEET MANAGEMENT FUNCTIONS */
@@ -372,10 +501,10 @@ export function MappingPage() {
       return;
     }
 
-    if (!skipSchemeCheck) {
-      const proceed = await checkForSchemes();
-      if (!proceed) return;
-    }
+    // if (!skipSchemeCheck) {
+    //   const proceed = await checkForSchemes();
+    //   if (!proceed) return;
+    // }
 
     try {
       setConverting(true);
@@ -426,7 +555,7 @@ export function MappingPage() {
             <h1 className="text-3xl font-bold text-neutral-900">Review Order Quantities</h1>
             <p className="text-neutral-600 mt-1">Verify products and quantities before processing</p>
           </div>
-          <Button onClick={addRow} variant="outline" size="sm" className="gap-2">
+          <Button onClick={addRow} variant="secondary" size="sm" className="gap-2">
             <Package className="w-4 h-4" />
             + Add Item
           </Button>
@@ -614,7 +743,7 @@ export function MappingPage() {
                     Division
                   </th>
                   <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide w-[12%]">
-                    📋 Sheet
+                     Sheet
                   </th>
                   <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide w-[12%]">
                     Status
@@ -667,123 +796,214 @@ export function MappingPage() {
                               ${sheet ? sheet.color.bg : ""}
                             `}
                           >
-                            {/* PRODUCT NAME CELL - REDUCED WIDTH */}
-                            <td className="px-3 py-2 align-top">
-                              <div className="space-y-2">
-                                {/* Input or Display Name */}
-                                <div>
-                                  {!row.matchedProduct ? (
-                                    <div className="relative">
-                                      <input
-                                        type="text"
-                                        value={row.ITEMDESC || ""}
-                                        onChange={(e) => {
-                                          handleRowChange(i, "ITEMDESC", e.target.value);
-                                          handleRowChange(i, "matchedProduct", null);
-                                        }}
-                                        placeholder="Search product..."
-                                        className="w-full text-xs border rounded px-2 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                      />
-                                      {/* AUTOCOMPLETE DROPDOWN */}
-                                      {row.ITEMDESC?.length >= 2 && (
-                                        <div className="absolute z-50 w-full mt-1 bg-white border border-neutral-300 rounded-lg shadow-xl max-h-64 overflow-y-auto">
-                                          {allProducts
-                                            .filter(p => {
-                                              const normalizeTokens = (text = "") =>
-                                                text.toUpperCase().replace(/[^A-Z0-9]/g, " ").split(/\s+/).filter(Boolean);
-                                              const invTokens = normalizeTokens(row.ITEMDESC);
-                                              const prodTokens = normalizeTokens(p.productName);
-                                              const baseTokens = normalizeTokens(p.baseName || "");
+                                {/* PRODUCT NAME CELL - REDUCED WIDTH */}
+                                <td className="px-3 py-2 align-top">
+                                  <div className="flex flex-col gap-1">
+                                    {/* Extracted Name Section */}
+                                    <div className="w-full">
+                                      {!row.matchedProduct ? (
+                                        <div className="relative">
+                                          <input
+                                            type="text"
+                                            value={row.ITEMDESC || ""}
+                                            onChange={(e) => {
+                                              handleRowChange(i, "ITEMDESC", e.target.value);
+                                              handleRowChange(i, "matchedProduct", null);
+                                            }}
+                                            placeholder="Search product..."
+                                            className="w-full text-xs border rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-8"
+                                          />
+                                          {/* AUTOCOMPLETE DROPDOWN */}
+                                          {row.ITEMDESC?.length >= 2 && (
+                                            <div className="absolute z-50 w-full mt-1 bg-white border border-neutral-300 rounded-lg shadow-xl max-h-64 overflow-y-auto">
+                                              {allProducts
+                                                .filter(p => {
+                                                  const normalizeTokens = (text = "") =>
+                                                    text.toUpperCase().replace(/[^A-Z0-9]/g, " ").split(/\s+/).filter(Boolean);
+                                                  const invTokens = normalizeTokens(row.ITEMDESC);
+                                                  const prodTokens = normalizeTokens(p.productName);
+                                                  const baseTokens = normalizeTokens(p.baseName || "");
 
-                                              if (invTokens.length === 0) return false;
+                                                  if (invTokens.length === 0) return false;
 
-                                              const matchForward = invTokens.every(t => prodTokens.includes(t));
-                                              const matchBackward = prodTokens.length > 0 && prodTokens.every(t => invTokens.includes(t));
-                                              const matchBase = baseTokens.length > 0 && invTokens.every(t => baseTokens.includes(t));
-                                              const matchBrand = invTokens.some(t => t.length >= 3 && isNaN(Number(t)) && prodTokens.includes(t));
+                                                  const matchForward = invTokens.every(t => prodTokens.includes(t));
+                                                  const matchBackward = prodTokens.length > 0 && prodTokens.every(t => invTokens.includes(t));
+                                                  const matchBase = baseTokens.length > 0 && invTokens.every(t => baseTokens.includes(t));
+                                                  const matchBrand = invTokens.some(t => t.length >= 3 && isNaN(Number(t)) && prodTokens.includes(t));
 
-                                              return matchForward || matchBackward || matchBase || matchBrand;
-                                            })
-                                            .sort((a, b) => 0)
-                                            .slice(0, 50)
-                                            .map(p => (
-                                              <button
-                                                key={p.productCode}
-                                                onClick={() => {
-                                                  setRows(prev => {
-                                                    const next = [...prev];
-                                                    next[i] = {
-                                                      ...next[i],
-                                                      ITEMDESC: p.productName,
-                                                      matchedProduct: p,
-                                                      SAPCODE: p.productCode,
-                                                      DVN: p.division,
-                                                      mappingSource: "MANUAL",
-                                                      availableSchemes: []
-                                                    };
+                                                  return matchForward || matchBackward || matchBase || matchBrand;
+                                                })
+                                                .sort((a, b) => 0)
+                                                .slice(0, 50)
+                                                .map(p => (
+                                                  <button
+                                                    key={p.productCode}
+                                                    onClick={() => {
+                                                      setRows(prev => {
+                                                        const next = [...prev];
+                                                        next[i] = {
+                                                          ...next[i],
+                                                          matchedProduct: p,
+                                                          SAPCODE: p.productCode,
+                                                          DVN: p.division,
+                                                          mappingSource: "MANUAL",
+                                                          availableSchemes: []
+                                                        };
 
-                                                    if (selectedCustomer?.customerCode) {
-                                                      api.get(`/orders/schemes/product/${p.productCode}`, {
-                                                        params: {
-                                                          customerCode: selectedCustomer.customerCode,
-                                                          division: p.division
-                                                        }
-                                                      }).then(res => {
-                                                        if (res.data?.schemes?.length > 0) {
-                                                          setRows(curr => {
-                                                            const updated = [...curr];
-                                                            updated[i] = {
-                                                              ...updated[i],
-                                                              availableSchemes: res.data.schemes
-                                                            };
-                                                            return updated;
+                                                        if (selectedCustomer?.customerCode) {
+                                                          api.get(`/orders/schemes/product/${p.productCode}`, {
+                                                            params: {
+                                                              customerCode: selectedCustomer.customerCode,
+                                                              division: p.division
+                                                            }
+                                                          }).then(res => {
+                                                            if (res.data?.schemes?.length > 0) {
+                                                              setRows(curr => {
+                                                                const updated = [...curr];
+                                                                updated[i] = {
+                                                                  ...updated[i],
+                                                                  availableSchemes: res.data.schemes
+                                                                };
+                                                                return updated;
+                                                              });
+                                                            }
                                                           });
                                                         }
-                                                      });
-                                                    }
 
-                                                    return next;
-                                                  });
-                                                }}
-                                                className="w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 border-b border-neutral-100 last:border-b-0 transition-colors group/item"
-                                              >
-                                                <div className="font-medium text-neutral-900 group-hover/item:text-blue-700">
-                                                  {formatProductDisplay(p)}
-                                                </div>
-                                                <div className="text-neutral-500 mt-0.5">
-                                                  {p.productCode} • {p.division}
-                                                </div>
-                                              </button>
-                                            ))}
+                                                        return next;
+                                                      });
+                                                    }}
+                                                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 border-b border-neutral-100 last:border-b-0 transition-colors group/item"
+                                                  >
+                                                    <div className="font-medium text-neutral-900 group-hover/item:text-blue-700">
+                                                      {formatProductDisplay(p)}
+                                                    </div>
+                                                    <div className="text-neutral-500 mt-0.5">
+                                                      {p.productCode} • {p.division}
+                                                    </div>
+                                                  </button>
+                                                ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <div className="text-xs font-medium text-neutral-500 leading-tight px-1 py-0.5">
+                                          {row.ITEMDESC || "(No Name)"}
                                         </div>
                                       )}
                                     </div>
-                                  ) : (
-                                    <div className="text-xs font-medium text-neutral-700 leading-tight">
-                                      {row.ITEMDESC || "(No Name)"}
-                                    </div>
-                                  )}
-                                </div>
 
-                                {/* Mapped Product Info */}
-                                {row.matchedProduct && (
-                                  <div className="flex items-center justify-between gap-2 px-2 py-1.5 bg-green-50 border border-green-200 rounded text-xs">
-                                    <div className="flex-1 min-w-0">
-                                      <div className="font-semibold text-green-800 truncate">
-                                        {formatProductDisplay(row.matchedProduct)}
-                                      </div>
-                                      <div className="text-green-600 text-[10px]">
-                                        #{row.matchedProduct.productCode}
-                                      </div>
-                                    </div>
-                                    <button
-                                      onClick={() => handleRowChange(i, "matchedProduct", null)}
-                                      title="Change Product"
-                                      className="flex-shrink-0 p-1 hover:bg-green-100 rounded"
-                                    >
-                                      <Edit2 className="w-3 h-3 text-green-700" />
-                                    </button>
-                                  </div>
+                                    {/* Mapped Product Info */}
+                                    {row.matchedProduct && (
+                                          <div className="w-full">
+                                            <div 
+                                              onClick={() => handleRowChange(i, "matchedProduct", null)}
+                                              className="flex items-center justify-between gap-1 px-2 py-1.5 bg-green-50 border border-green-200 rounded text-xs shadow-sm group/mapped cursor-pointer hover:bg-green-100 transition-colors"
+                                              title="Click to change product"
+                                            >
+                                              <div className="flex-1 min-w-0">
+                                                <div className="font-bold text-green-900 truncate text-xs">
+                                                  {formatProductDisplay(row.matchedProduct)}
+                                                </div>
+                                                <div className="text-green-700 text-[10px] opacity-80">
+                                                  #{row.matchedProduct.productCode}
+                                                </div>
+                                              </div>
+                                              <Edit2 className="w-3 h-3 text-green-600 opacity-0 group-hover/mapped:opacity-100 transition-opacity" />
+                                            </div>
+                                          </div>
+                                        )}
+  
+                                    {/* SCHEME BADGES - Minimal Gift Box Style */}
+                                    {row.matchedProduct && row.availableSchemes?.length > 0 && (
+  
+                                       (() => {
+                                           const schemeInfo = getSchemeInfo(row);
+                                           const { active, next, all } = schemeInfo || {};
+                                           
+                                           // Fallback for when no active/next but schemes exist
+                                           if (!active && !next && (!all || all.length === 0)) return null;
+
+                                           return (
+                                            <div className="mt-1 flex flex-col gap-0.5 w-full relative group/scheme">
+                                                
+                                                {/* ACTIVE SCHEME (Eligible) - Minimal Pill */}
+                                                {active && (
+                                                    <div className="flex items-center justify-between px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-colors cursor-pointer"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            // Toggle apply
+                                                            const finalQty = active.minQty + active.totalFree;
+                                                            handleRowChange(i, "ORDERQTY", finalQty);
+                                                            handleRowChange(i, "schemeApplied", true);
+                                                            toast.success(`Applied: ${finalQty}`);
+                                                        }}
+                                                    >
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Gift className="w-3 h-3 text-amber-600" />
+                                                            <span>{active.minQty}+{active.totalFree} Free</span>
+                                                        </div>
+                                                        <div className="bg-amber-200 text-amber-800 text-[9px] px-1 rounded font-bold">APPLY</div>
+                                                    </div>
+                                                )}
+
+                                                {/* UPSELL (Next) - Minimal Pill */}
+                                                {next && (
+                                                    <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors"
+                                                         onClick={(e) => {
+                                                             e.stopPropagation();
+                                                             handleRowChange(i, "ORDERQTY", next.minQty);
+                                                             toast.info(`Updated to ${next.minQty}`);
+                                                         }}
+                                                         title={`Add ${next.minQty - (Number(row.ORDERQTY)||0)} to get ${next.minQty} + ${next.freeQty} Free`}
+                                                    >
+                                                         <Zap className="w-3 h-3 text-blue-500 fill-blue-500" />
+                                                         <span className="truncate">
+                                                            Add {next.minQty - (Number(row.ORDERQTY)||0)} → <span className="font-bold">{next.freeQty} Free</span>
+                                                         </span>
+                                                    </div>
+                                                )}
+                                                
+                                                {/* GENERIC OFFER BADGE (If logic missed active/next but schemes exist) */}
+                                                {!active && !next && (all?.length ?? 0) > 0 && (
+                                                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-neutral-100 text-neutral-600 border border-neutral-200">
+                                                        <Gift className="w-3 h-3 text-neutral-400" />
+                                                        <span>{all?.length} Offers</span>
+                                                    </div>
+                                                )}
+                                                
+                                                {/* HOVER DROPDOWN (Compact) */}
+                                                <div className="absolute z-50 left-0 top-full mt-0.5 w-56 bg-white rounded shadow-xl border border-neutral-200 hidden group-hover/scheme:block p-1">
+                                                    <div className="text-[10px] font-bold text-neutral-400 mb-1 px-1 uppercase tracking-wider">Schemes</div>
+                                                    <div className="space-y-0.5 max-h-40 overflow-y-auto">
+                                                        {all?.map((s: any, idx: number) => {
+                                                             const isActive = active?.minQty === s.minQty;
+                                                             const isNext = next?.minQty === s.minQty;
+                                                             return (
+                                                                 <button
+                                                                     key={idx}
+                                                                     onClick={(e) => {
+                                                                         e.stopPropagation(); 
+                                                                         handleRowChange(i, "ORDERQTY", s.minQty);
+                                                                     }}
+                                                                     className={`w-full text-left px-2 py-1 rounded-[4px] text-[10px] flex items-center justify-between transition-colors ${
+                                                                         isActive ? 'bg-amber-50 text-amber-900 font-semibold' : 
+                                                                         isNext ? 'bg-blue-50 text-blue-800' : 
+                                                                         'hover:bg-neutral-50 text-neutral-600'
+                                                                     }`}
+                                                                 >
+                                                                     <span>{s.schemeName || "Slab"} ({s.minQty}+{s.freeQty})</span>
+                                                                     {isActive && <Check className="w-3 h-3 text-amber-600" />}
+                                                                     {isNext && <span className="text-[9px] bg-blue-100 text-blue-700 px-1 rounded">Next</span>}
+                                                                 </button>
+                                                             );
+                                                        })}
+                                                    </div>
+                                               </div>
+                                           </div>
+                                          );
+                                      })()
+
                                 )}
                               </div>
                             </td>
