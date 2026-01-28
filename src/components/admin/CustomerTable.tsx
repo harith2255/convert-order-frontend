@@ -174,10 +174,47 @@ export function CustomerTable() {
     <Card>
       <div className="flex justify-between items-center mb-3">
         <h3 className="text-lg font-semibold">Customers ({total})</h3>
-        <Button size="sm" onClick={handleCreate}>
-          <Plus className="w-4 h-4 mr-1" />
-          Add Customer
-        </Button>
+        <div className="flex gap-2">
+            <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                id="custFileInput"
+                className="hidden"
+                onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                        const loadingToast = toast.loading("Uploading customers...");
+                        await masterDataApi.uploadCustomers(file);
+                        toast.dismiss(loadingToast);
+                        toast.success("Customers uploaded successfully");
+                        loadCustomers();
+                    } catch (err: any) {
+                        toast.error(err.response?.data?.error || "Upload failed");
+                    }
+                }}
+            />
+            <Button size="sm" variant="secondary" onClick={() => document.getElementById("custFileInput")?.click()}>
+                Import
+            </Button>
+             <Button size="sm" variant="secondary" onClick={async () => {
+                const toastId = toast.loading("Exporting...");
+                try {
+                    await masterDataApi.exportCustomers();
+                    toast.dismiss(toastId);
+                    toast.success("Export started");
+                } catch {
+                     toast.dismiss(toastId);
+                     toast.error("Export failed");
+                }
+            }}>
+                Export
+            </Button>
+            <Button size="sm" onClick={handleCreate}>
+                <Plus className="w-4 h-4 mr-1" />
+                Add Customer
+            </Button>
+        </div>
       </div>
 
       <Input

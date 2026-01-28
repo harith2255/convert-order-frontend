@@ -144,9 +144,46 @@ export function SchemeTable() {
         <h3 className="text-lg font-semibold">
           Schemes ({total})
         </h3>
-        <Button size="sm" onClick={openCreate}>
-          <Plus className="w-4 h-4 mr-1" /> Add Scheme
-        </Button>
+        <div className="flex gap-2">
+            <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                id="schemeFileInput"
+                className="hidden"
+                onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                        const loadingToast = toast.loading("Uploading schemes...");
+                        await masterDataApi.uploadSchemes(file);
+                        toast.dismiss(loadingToast);
+                        toast.success("Schemes uploaded successfully");
+                        loadSchemes();
+                    } catch (err: any) {
+                        toast.error(err.response?.data?.error || "Upload failed");
+                    }
+                }}
+            />
+            <Button size="sm" variant="secondary" onClick={() => document.getElementById("schemeFileInput")?.click()}>
+                Import
+            </Button>
+            <Button size="sm" variant="secondary" onClick={async () => {
+                const toastId = toast.loading("Exporting...");
+                try {
+                    await masterDataApi.exportSchemes();
+                    toast.dismiss(toastId);
+                    toast.success("Export started");
+                } catch {
+                     toast.dismiss(toastId);
+                     toast.error("Export failed");
+                }
+            }}>
+                Export
+            </Button>
+            <Button size="sm" onClick={openCreate}>
+                <Plus className="w-4 h-4 mr-1" /> Add Scheme
+            </Button>
+        </div>
       </div>
 
       <Input

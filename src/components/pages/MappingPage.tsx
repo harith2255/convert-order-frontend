@@ -1,7 +1,12 @@
 /**
- * MAPPING PAGE - FIXED VERSION
- * Fixes: Customer selection dropdown, candidate handling, proper code passing
+ * MAPPING PAGE - OPTIMIZED LAYOUT VERSION
+ * Improvements: 
+ * - Reduced ITEMDESC column width
+ * - Balanced column sizing
+ * - Added proper spacing between cells
+ * - Professional table layout
  */
+
 import React, { useEffect, useState, useRef } from "react";
 import {
   ArrowRight,
@@ -14,7 +19,12 @@ import {
   Zap,
   Gift,
   Package,
-  Database
+  Database,
+  ChevronDown,
+  ChevronRight,
+  Box,
+  Check,
+  Edit2
 } from "lucide-react";
 import { Card } from "../Card";
 import { Button } from "../Button";
@@ -36,25 +46,27 @@ export function MappingPage() {
   const [uploadId, setUploadId] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
 
+  // Grouping State
+  const [expandedDivisions, setExpandedDivisions] = useState<Record<string, boolean>>({});
+
   const [customers, setCustomers] = useState<any[]>([]);
   const [customerInput, setCustomerInput] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [searching, setSearching] = useState(false);
   const [showCandidates, setShowCandidates] = useState(false);
-  
   const autoCustomerLocked = useRef(false);
-  
+
   /* 📊 MASTER DATA COUNTS */
   const [counts, setCounts] = useState({ products: 0, customers: 0 });
   const [loadingCounts, setLoadingCounts] = useState(true);
 
   /* ✅ MASTER PRODUCTS FOR MANUAL MAPPING */
   const [allProducts, setAllProducts] = useState<any[]>([]);
-  
+
   /* 🎁 SCHEME SUGGESTIONS STATE */
   const [schemeSuggestions, setSchemeSuggestions] = useState<any[]>([]);
   const [showSchemeModal, setShowSchemeModal] = useState(false);
-  
+
   /* 📋 MULTI-SHEET ORGANIZATION STATE */
   const [sheets, setSheets] = useState<{
     id: string;
@@ -64,33 +76,25 @@ export function MappingPage() {
   }[]>([]);
   const [selectedRows, setSelectedRows] = useState<number[]>([]);
 
-const formatProductDisplay = (p: any) => {
-  if (!p) return "";
-  
-  // 🔥 FIX: Reorder product name from "BRAND STRENGTH VARIANT" to "BRAND VARIANT STRENGTH"
-  // e.g. "AMLONG 50 MT" -> "AMLONG MT 50"
-  const reorderProductName = (name: string) => {
-    if (!name) return "";
-    
-    // Match pattern: BRAND + NUMBER + VARIANT (e.g. AMLONG 50 MT, NULONG 40 OL)
-    const match = name.match(/^([A-Z\-]+)\s+(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)\s+([A-Z]+)$/i);
-    if (match) {
-      const [, brand, strength, variant] = match;
-      return `${brand} ${variant} ${strength}`;
-    }
-    
-    return name; // Return as-is if pattern doesn't match
+  const formatProductDisplay = (p: any) => {
+    if (!p) return "";
+
+    const reorderProductName = (name: string) => {
+      if (!name) return "";
+      const match = name.match(/^([A-Z\-]+)\s+(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)\s+([A-Z]+)$/i);
+      if (match) {
+        const [, brand, strength, variant] = match;
+        return `${brand} ${variant} ${strength}`;
+      }
+      return name;
+    };
+
+    const displayName = p.productName
+      ? reorderProductName(p.productName)
+      : [p.baseName, p.variant, p.dosage].filter(Boolean).join(" ");
+
+    return displayName.replace(/-/g, " ");
   };
-  
-  const displayName = p.productName 
-    ? reorderProductName(p.productName)
-    : [p.baseName, p.variant, p.dosage].filter(Boolean).join(" ");
-    
-  // 🔥 FIX: Replace hyphens with spaces (Requested by user)
-  return displayName.replace(/-/g, " ");
-};
-
-
 
   const SHEET_COLORS = [
     { bg: 'bg-blue-50', border: 'border-blue-300', text: 'text-blue-700', badge: 'bg-blue-100' },
@@ -100,25 +104,24 @@ const formatProductDisplay = (p: any) => {
     { bg: 'bg-pink-50', border: 'border-pink-300', text: 'text-pink-700', badge: 'bg-pink-100' },
   ];
 
-  // ... (useEffect load products - SAME)
   /* ---------------- LOAD MASTER PRODUCTS & COUNTS ---------------- */
   useEffect(() => {
     setLoadingCounts(true);
     const fetchCounts = async () => {
-        try {
-            const [prodRes, custRes] = await Promise.all([
-                api.get("/admin/products", { params: { limit: 1 } }),
-                api.get("/admin/customers", { params: { limit: 1 } })
-            ]);
-            setCounts({
-                products: prodRes.data?.total || 0,
-                customers: custRes.data?.total || 0
-            });
-        } catch (err) {
-            console.error("Failed to fetch counts", err);
-        } finally {
-            setLoadingCounts(false);
-        }
+      try {
+        const [prodRes, custRes] = await Promise.all([
+          api.get("/admin/products", { params: { limit: 1 } }),
+          api.get("/admin/customers", { params: { limit: 1 } })
+        ]);
+        setCounts({
+          products: prodRes.data?.total || 0,
+          customers: custRes.data?.total || 0
+        });
+      } catch (err) {
+        console.error("Failed to fetch counts", err);
+      } finally {
+        setLoadingCounts(false);
+      }
     };
 
     fetchCounts();
@@ -129,8 +132,7 @@ const formatProductDisplay = (p: any) => {
       .catch(() => setAllProducts([]));
   }, []);
 
-  // ... (customer search - SAME)
-    /* ---------------- CUSTOMER SEARCH (DEBOUNCED) ---------------- */
+  /* ---------------- CUSTOMER SEARCH (DEBOUNCED) ---------------- */
   useEffect(() => {
     if (autoCustomerLocked.current) return;
     if (!customerInput || customerInput.length < 2) {
@@ -141,9 +143,7 @@ const formatProductDisplay = (p: any) => {
     const timer = setTimeout(() => {
       setSearching(true);
       api
-        .get("/admin/customers", {
-          params: { search: customerInput, limit: 100 }
-        })
+        .get("/admin/customers", { params: { search: customerInput, limit: 100 } })
         .then(res => setCustomers(res.data?.data || []))
         .catch(() => setCustomers([]))
         .finally(() => setSearching(false));
@@ -154,23 +154,33 @@ const formatProductDisplay = (p: any) => {
 
   /* ---------------- INIT ---------------- */
   useEffect(() => {
-    // ... (same init logic)
     if (!parsedResult?.dataRows || !parsedResult.uploadId) {
       toast.error("Invalid upload session. Please re-upload.");
       navigate("/upload");
       return;
     }
 
-    setRows(parsedResult.dataRows);
+    const sanitizedRows = parsedResult.dataRows.map((r: any) => {
+      const qty = Number(r.ORDERQTY) || 0;
+      const boxPack = Number(r["BOX PACK"] || r.matchedProduct?.boxPack) || 0;
+      let pack = r.PACK;
+
+      if (boxPack > 0 && qty > 0) {
+        const rawPack = qty / boxPack;
+        pack = Number.isInteger(rawPack) ? rawPack : Number(rawPack.toFixed(2));
+      }
+
+      return { ...r, PACK: pack, ORDERQTY: qty };
+    });
+
+    setRows(sanitizedRows);
     setUploadId(parsedResult.uploadId);
 
-    // ✅ HANDLE CUSTOMER AUTO-FILL
     if (parsedResult.customer) {
       const { name, code, candidates, source } = parsedResult.customer;
 
       if (name) setCustomerInput(name);
 
-      // 🔥 FIX: Auto-apply if source is EXACT or FUZZY_AUTO (backend auto-matched)
       if ((source === 'EXACT' || source === 'FUZZY_AUTO') && code) {
         setSelectedCustomer({
           customerCode: code,
@@ -178,12 +188,12 @@ const formatProductDisplay = (p: any) => {
           city: parsedResult.customer.city,
           state: parsedResult.customer.state
         });
-        autoCustomerLocked.current = true; // Lock to prevent search overwriting
+        autoCustomerLocked.current = true;
         toast.success(`Auto-selected customer: ${name}`);
       }
 
       if (source === 'MANUAL_REQUIRED' && candidates?.length > 0) {
-        setCustomers(candidates.map((c: any) => c.customer || c)); // Handle both formats
+        setCustomers(candidates.map((c: any) => c.customer || c));
         setShowCandidates(true);
         toast.warning(`Multiple customers found for "${name}". Please select one.`);
       }
@@ -193,27 +203,24 @@ const formatProductDisplay = (p: any) => {
       }
     }
 
-    parsedResult.dataRows.forEach((row: any, i: number) =>
-      validateRow(i, row)
-    );
+    setExpandedDivisions({});
+
+    parsedResult.dataRows.forEach((row: any, i: number) => validateRow(i, row));
   }, [parsedResult, navigate]);
 
   const handleCustomerSelect = (customer: any) => {
-  setSelectedCustomer({
-    customerCode: customer.customerCode,
-    customerName: customer.customerName,
-    city: customer.city,
-    state: customer.state
-  });
-
-  setCustomerInput(customer.customerName);
-  setCustomers([]);
-  setShowCandidates(false);
-
-  autoCustomerLocked.current = false;
-
-  toast.success(`Selected customer: ${customer.customerName}`);
-};
+    setSelectedCustomer({
+      customerCode: customer.customerCode,
+      customerName: customer.customerName,
+      city: customer.city,
+      state: customer.state
+    });
+    setCustomerInput(customer.customerName);
+    setCustomers([]);
+    setShowCandidates(false);
+    autoCustomerLocked.current = false;
+    toast.success(`Selected customer: ${customer.customerName}`);
+  };
 
   /* ---------------- VALIDATION ---------------- */
   const validateRow = (index: number, row: any) => {
@@ -228,12 +235,7 @@ const formatProductDisplay = (p: any) => {
   const addRow = () => {
     setRows(prev => [
       ...prev,
-      {
-        ITEMDESC: "",
-        ORDERQTY: "",
-        manualProduct: null,
-        isNew: true
-      }
+      { ITEMDESC: "", ORDERQTY: "", manualProduct: null, isNew: true }
     ]);
   };
 
@@ -245,43 +247,48 @@ const formatProductDisplay = (p: any) => {
   const handleRowChange = (index: number, field: string, value: any) => {
     setRows(prev => {
       const next = [...prev];
-      next[index] = { ...next[index], [field]: value };
-      
-      if (field === 'ORDERQTY') {
-         if (!value || isNaN(Number(value)) || Number(value) <= 0) {
-             setRowErrors(errs => ({ ...errs, [index]: ["Invalid Qty"] }));
-         } else {
-             setRowErrors(errs => {
-                 const newErrs = { ...errs };
-                 delete newErrs[index];
-                 return newErrs;
-             });
-         }
+      let updatedRow = { ...next[index], [field]: value };
+
+      if (field === 'ORDERQTY' || field === 'BOX PACK') {
+        const qty = Number(field === 'ORDERQTY' ? value : updatedRow.ORDERQTY) || 0;
+        const boxPack = Number(field === 'BOX PACK' ? value : (updatedRow["BOX PACK"] || updatedRow.matchedProduct?.boxPack)) || 0;
+
+        if (boxPack > 0) {
+          const rawPack = qty / boxPack;
+          updatedRow.PACK = Number.isInteger(rawPack) ? rawPack : Number(rawPack.toFixed(2));
+        }
       }
+
+      next[index] = updatedRow;
+
+      if (field === 'ORDERQTY') {
+        if (!value || isNaN(Number(value)) || Number(value) <= 0) {
+          setRowErrors(errs => ({ ...errs, [index]: ["Invalid Qty"] }));
+        } else {
+          setRowErrors(errs => {
+            const newErrs = { ...errs };
+            delete newErrs[index];
+            return newErrs;
+          });
+        }
+      }
+
       return next;
     });
   };
 
   /* 📋 SHEET MANAGEMENT FUNCTIONS */
-  
-  // Get which sheet a product belongs to
   const getProductSheet = (rowIndex: number) => {
     return sheets.find(sheet => sheet.productIndices.includes(rowIndex));
   };
 
-  // Toggle row selection
   const toggleRowSelection = (rowIndex: number) => {
-    // Can't select if already in a sheet
     if (getProductSheet(rowIndex)) return;
-    
-    setSelectedRows(prev => 
-      prev.includes(rowIndex)
-        ? prev.filter(i => i !== rowIndex)
-        : [...prev, rowIndex]
+    setSelectedRows(prev =>
+      prev.includes(rowIndex) ? prev.filter(i => i !== rowIndex) : [...prev, rowIndex]
     );
   };
 
-  // Create new sheet with selected products
   const createNewSheet = () => {
     if (selectedRows.length === 0) {
       toast.error("Please select products first");
@@ -290,7 +297,7 @@ const formatProductDisplay = (p: any) => {
 
     const sheetNumber = sheets.length + 1;
     const colorIndex = (sheets.length) % SHEET_COLORS.length;
-    
+
     const newSheet = {
       id: `sheet-${Date.now()}`,
       name: `Sheet ${sheetNumber}`,
@@ -299,65 +306,59 @@ const formatProductDisplay = (p: any) => {
     };
 
     setSheets(prev => [...prev, newSheet]);
-    setSelectedRows([]); // Clear selection
+    setSelectedRows([]);
     toast.success(`Created ${newSheet.name} with ${selectedRows.length} products`);
   };
 
-  //Remove sheet and free its products
   const removeSheet = (sheetId: string) => {
     setSheets(prev => prev.filter(s => s.id !== sheetId));
     toast.success("Sheet removed");
   };
 
-
+  const toggleDivision = (division: string) => {
+    setExpandedDivisions(prev => ({ ...prev, [division]: !prev[division] }));
+  };
 
   /* ---------------- SCHEME CHECK LOGIC ---------------- */
   const checkForSchemes = async () => {
     try {
-        // Ensure strictly numeric types for backend
-        const cleanRows = rows.map(r => ({
-            ...r,
-            ORDERQTY: Number(r.ORDERQTY) || 0
-        }));
+      const cleanRows = rows.map(r => ({ ...r, ORDERQTY: Number(r.ORDERQTY) || 0 }));
+      const res = await api.post("/orders/check-schemes", {
+        dataRows: cleanRows,
+        customerCode: selectedCustomer?.customerCode
+      });
 
-        const res = await api.post("/orders/check-schemes", { 
-            dataRows: cleanRows,
-            customerCode: selectedCustomer?.customerCode 
-        });
-        if (res.data?.suggestions?.length > 0) {
-            setSchemeSuggestions(res.data.suggestions);
-            setShowSchemeModal(true);
-            return false; // Found suggestions, stop convert
-        }
-        return true; // No suggestions, proceed
+      if (res.data?.suggestions?.length > 0) {
+        setSchemeSuggestions(res.data.suggestions);
+        setShowSchemeModal(true);
+        return false;
+      }
+      return true;
     } catch (err) {
-        // If check fails, just proceed silently or log it
-        console.error("Scheme check failed", err);
-        return true;
+      console.error("Scheme check failed", err);
+      return true;
     }
   };
 
   const applySchemeSuggestion = (suggestion: any) => {
-      handleRowChange(suggestion.rowIndex, "ORDERQTY", suggestion.suggestedQty);
-      // Remove from list
-      setSchemeSuggestions(prev => prev.filter(s => s.rowIndex !== suggestion.rowIndex));
-      toast.success(`Updated quantity to ${suggestion.suggestedQty}!`);
+    handleRowChange(suggestion.rowIndex, "ORDERQTY", suggestion.suggestedQty);
+    setSchemeSuggestions(prev => prev.filter(s => s.rowIndex !== suggestion.rowIndex));
+    toast.success(`Updated quantity to ${suggestion.suggestedQty}!`);
   };
 
   /* ---------------- CONVERT ---------------- */
   const handleConvert = async (skipSchemeCheck = false) => {
-    // Re-validate all
     const currentErrors: Record<number, string[]> = {};
     rows.forEach((row, i) => {
-        if (!row.ORDERQTY || isNaN(Number(row.ORDERQTY)) || Number(row.ORDERQTY) <= 0) {
-            currentErrors[i] = ["Invalid Qty"];
-        }
+      if (!row.ORDERQTY || isNaN(Number(row.ORDERQTY)) || Number(row.ORDERQTY) <= 0) {
+        currentErrors[i] = ["Invalid Qty"];
+      }
     });
 
     if (Object.keys(currentErrors).length > 0) {
-        setRowErrors(currentErrors);
-        toast.error("Fix quantity errors before continuing");
-        return;
+      setRowErrors(currentErrors);
+      toast.error("Fix quantity errors before continuing");
+      return;
     }
 
     if (!selectedCustomer?.customerCode) {
@@ -365,46 +366,32 @@ const formatProductDisplay = (p: any) => {
       return;
     }
 
-    // ✅ BLOCK IF UNMAPPED PRODUCTS
-    const unmapped = rows.some(
-      r => !r.matchedProduct && !r.manualProduct
-    );
-
+    const unmapped = rows.some(r => !r.matchedProduct && !r.manualProduct);
     if (unmapped) {
       toast.error("Please manually map all unmatched products");
       return;
     }
 
-    // 🎁 CHECK SCHEMES (unless skipped)
     if (!skipSchemeCheck) {
-        const proceed = await checkForSchemes();
-        if (!proceed) return;
+      const proceed = await checkForSchemes();
+      if (!proceed) return;
     }
 
     try {
       setConverting(true);
-      
-      // ✅ PASS MODIFIED ROWS TO BACKEND
-      setConverting(true);
-      
-      // ✅ PASS MODIFIED ROWS TO BACKEND (Ensure numeric types)
+
       const cleanRows = rows.map(r => ({
-          ...r,
-          ORDERQTY: Number(r.ORDERQTY) || 0,
-          // If manually mapped, ensure matchedProduct is fully populated or at least id present
-          matchedProduct: r.matchedProduct ? { ...r.matchedProduct } : null,
-          // 🔥 FIX: Send the exact displayed name to backend
-          ITEMDESC: r.matchedProduct ? formatProductDisplay(r.matchedProduct) : r.ITEMDESC
+        ...r,
+        ORDERQTY: Number(r.ORDERQTY) || 0,
+        matchedProduct: r.matchedProduct ? { ...r.matchedProduct } : null,
+        ITEMDESC: r.matchedProduct ? formatProductDisplay(r.matchedProduct) : r.ITEMDESC
       }));
 
       const res = await api.post("/orders/convert", {
         uploadId,
         customerCode: selectedCustomer.customerCode,
-        dataRows: cleanRows, // Send state to backend
-        sheets: sheets.map(s => ({
-          name: s.name,
-          productIndices: s.productIndices
-        }))
+        dataRows: cleanRows,
+        sheets: sheets.map(s => ({ name: s.name, productIndices: s.productIndices }))
       });
 
       toast.success("Order quantities processed successfully");
@@ -416,511 +403,547 @@ const formatProductDisplay = (p: any) => {
     }
   };
 
-  // ... (render logic) - Customer Selection, etc.
+  // Group Data Logic
+  const groupedData = React.useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    rows.forEach((row, index) => {
+      const div = row.DVN || row.Division || row.DIVISION || row.division || row.dvn || row.matchedProduct?.division || "Unassigned";
+      if (!groups[div]) groups[div] = [];
+      groups[div].push({ row, originalIndex: index });
+    });
+    return groups;
+  }, [rows]);
+
+  const sortedDivisions = Object.keys(groupedData).sort();
 
   /* ---------------- RENDER ---------------- */
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Review Order Quantities</h1>
-        <Button onClick={addRow} variant="secondary">
-          + Add Item
-        </Button>
-      </div>
-      
-
-      
-      {/* ... CUSTOMER CARD ... */}
-      <Card>
-        <div className="space-y-2">
-          <label className="text-sm font-medium flex items-center gap-2">
-            <User className="w-4 h-4" />
-            Select Customer (Admin Master)
-            {showCandidates && (
-              <Badge variant="warning">Multiple matches - please select</Badge>
-            )}
-          </label>
-
-          <div className="relative">
-            <input
-              value={customerInput}
-              onChange={e => {
-                autoCustomerLocked.current = false;
-                setShowCandidates(false);
-                setCustomerInput(e.target.value);
-                setSelectedCustomer(null);
-              }}
-              placeholder="Search customer by name or code"
-              className="w-full border rounded px-3 py-2 pr-10 text-sm"
-              disabled={autoCustomerLocked.current && selectedCustomer}
-            />
-
-            {searching && (
-              <RefreshCw className="absolute right-3 top-2.5 w-4 h-4 animate-spin opacity-60" />
-            )}
-
-            {selectedCustomer && autoCustomerLocked.current && (
-              <button
-                onClick={() => {
-                  autoCustomerLocked.current = false;
-                  setSelectedCustomer(null);
-                  setCustomerInput("");
-                }}
-                className="absolute right-3 top-2.5 text-neutral-400 hover:text-neutral-600"
-                title="Clear selection"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+    <div className="min-h-screen bg-gradient-to-br from-neutral-50 via-white to-blue-50/30 p-6">
+      <div className="max-w-[1600px] mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-neutral-900">Review Order Quantities</h1>
+            <p className="text-neutral-600 mt-1">Verify products and quantities before processing</p>
           </div>
+          <Button onClick={addRow} variant="outline" size="sm" className="gap-2">
+            <Package className="w-4 h-4" />
+            + Add Item
+          </Button>
+        </div>
 
-          {(customerInput && customers.length > 0 && !selectedCustomer) && (
-            <div className="border rounded max-h-56 overflow-auto bg-white shadow-lg z-10">
-              {customers.map(c => (
-                <button
-                  key={c._id || c.customerCode}
-                  type="button"
-                  onClick={() => handleCustomerSelect(c)}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b last:border-b-0"
-                >
-                  <div className="font-medium">{c.customerName}</div>
-                  <div className="text-xs text-neutral-500">
-                    Code: {c.customerCode}
-                    {(c.city || c.state) && (
-                      <span className="ml-2">• {c.city || c.state}</span>
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {selectedCustomer && (
-            <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded px-3 py-2 text-sm">
-              <div>
-                <div className="font-medium text-green-800">
-                  {selectedCustomer.customerName}
-                </div>
-                <div className="text-xs text-green-700">
-                  Code: {selectedCustomer.customerCode}
-                  {(selectedCustomer.city || selectedCustomer.state) && (
-                    <span className="ml-2">
-                      • {selectedCustomer.city || selectedCustomer.state}
-                    </span>
-                  )}
-                </div>
+        {/* Customer Selection Card */}
+        <Card className="p-6 border-2 border-blue-100 bg-white shadow-sm">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <User className="w-5 h-5 text-blue-600" />
+                <h2 className="text-lg font-semibold text-neutral-900">
+                  Select Customer (Admin Master)
+                </h2>
               </div>
+              {showCandidates && (
+                <Badge variant="warning" className="gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  Multiple matches - please select
+                </Badge>
+              )}
+            </div>
 
-              {!autoCustomerLocked.current && (
+            <div className="relative">
+              <input
+                type="text"
+                value={customerInput}
+                onChange={(e) => {
+                  autoCustomerLocked.current = false;
+                  setShowCandidates(false);
+                  setCustomerInput(e.target.value);
+                  setSelectedCustomer(null);
+                }}
+                placeholder="Search customer by name or code"
+                className="w-full border rounded px-3 py-2 pr-10 text-sm"
+                disabled={autoCustomerLocked.current && selectedCustomer}
+              />
+              {searching && (
+                <RefreshCw className="absolute right-3 top-2.5 w-4 h-4 text-neutral-400 animate-spin" />
+              )}
+              {selectedCustomer && autoCustomerLocked.current && (
                 <button
                   onClick={() => {
+                    autoCustomerLocked.current = false;
                     setSelectedCustomer(null);
                     setCustomerInput("");
                   }}
-                  className="text-red-600 hover:text-red-700"
+                  className="absolute right-3 top-2.5 text-neutral-400 hover:text-neutral-600"
+                  title="Clear selection"
                 >
                   <X className="w-4 h-4" />
                 </button>
               )}
             </div>
-          )}
-        </div>
-      </Card>
 
-
-      <Alert variant="warning">
-        <CheckCircle2 className="w-5 h-5 text-amber-600" />
-        <AlertDescription className="text-sm">
-          Product & customer data are taken from <strong>Admin Master</strong>.
-          Products with schemes will be highlighted in yellow in the final Excel.
-        </AlertDescription>
-      </Alert>
-
-      {/* 📋 SHEETS TOOLBAR */}
-      {rows.length > 0 && (
-        <Card>
-          <div className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
-            <div className="flex items-center gap-4">
-              <span className="text-sm font-medium text-neutral-700">
-                {selectedRows.length > 0 ? (
-                  <>✓ {selectedRows.length} product{selectedRows.length > 1 ? 's' : ''} selected</>
-                ) : (
-                  <>Select products to organize into sheets</>
-                )}
-              </span>
-            </div>
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={selectedRows.length === 0}
-              onClick={createNewSheet}
-              className="inline-flex items-center gap-2"
-            >
-              📋 Create Separate Sheet
-            </Button>
-            
-
-          </div>
-
-          {/* Sheets Panel */}
-          {sheets.length > 0 && (
-            <div className="p-3 bg-neutral-50 border-b">
-              <p className="text-xs font-semibold text-neutral-600 mb-2">Created Sheets:</p>
-              <div className="flex flex-wrap gap-2">
-                {sheets.map(sheet => (
-                  <div
-                    key={sheet.id}
-                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border ${sheet.color.border} ${sheet.color.bg}`}
+            {(customerInput && customers.length > 0 && !selectedCustomer) && (
+              <div className="border rounded-lg overflow-hidden max-h-60 overflow-y-auto shadow-sm">
+                {customers.map(c => (
+                  <button
+                    key={c.customerCode}
+                    onClick={() => handleCustomerSelect(c)}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b last:border-b-0"
                   >
-                    <span className={`text-sm font-medium ${sheet.color.text}`}>
-                      📋 {sheet.name}
-                    </span>
-                    <span className="text-xs text-neutral-600">
-                      ({sheet.productIndices.length} products)
-                    </span>
-                    <button
-                      onClick={() => removeSheet(sheet.id)}
-                      className={`ml-1 ${sheet.color.text} hover:opacity-70`}
-                      title="Remove sheet"
-                    >
-                      ×
-                    </button>
-                  </div>
+                    <div className="font-medium text-neutral-900">{c.customerName}</div>
+                    <div className="text-xs text-neutral-500 mt-0.5">
+                      Code: {c.customerCode}
+                      {(c.city || c.state) && (
+                        <span> • {c.city || c.state}</span>
+                      )}
+                    </div>
+                  </button>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+
+            {selectedCustomer && (
+              <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+                <div>
+                  <div className="font-medium text-green-900">{selectedCustomer.customerName}</div>
+                  <div className="text-xs text-green-700 mt-0.5">
+                    Code: {selectedCustomer.customerCode}
+                    {(selectedCustomer.city || selectedCustomer.state) && (
+                      <span> • {selectedCustomer.city || selectedCustomer.state}</span>
+                    )}
+                  </div>
+                </div>
+                {!autoCustomerLocked.current && (
+                  <button
+                    onClick={() => {
+                      setSelectedCustomer(null);
+                      setCustomerInput("");
+                    }}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </Card>
-      )}
 
-      {/* ---------------- PRODUCT ROWS ---------------- */}
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
-            <thead className="bg-neutral-100">
-              <tr>
-                <th className="px-4 py-3 text-left font-semibold text-neutral-700 border-b-2 border-neutral-200" style={{ minWidth: '280px' }}>
-                  ITEMDESC (Invoice)
-                </th>
-                <th className="px-4 py-3 text-center font-semibold text-neutral-700 border-b-2 border-neutral-200" style={{ minWidth: '120px' }}>
-                  Qty
-                </th>
-                <th className="px-4 py-3 text-center font-semibold text-neutral-700 border-b-2 border-neutral-200" style={{ minWidth: '100px' }}>
-                  Box Pack
-                </th>
-                <th className="px-4 py-3 text-center font-semibold text-neutral-700 border-b-2 border-neutral-200" style={{ minWidth: '100px' }}>
-                  Pack
-                </th>
-                <th className="px-4 py-3 text-center font-semibold text-neutral-700 border-b-2 border-neutral-200" style={{ minWidth: '100px' }}>
-                  Division
-                </th>
-                <th className="px-4 py-3 text-center font-semibold text-neutral-700 border-b-2 border-neutral-200" style={{ minWidth: '120px' }}>
-                  📋 Sheet
-                </th>
-                <th className="px-4 py-3 text-center font-semibold text-neutral-700 border-b-2 border-neutral-200" style={{ minWidth: '80px' }}>
-                  Status
-                </th>
-                <th className="px-4 py-3 text-center font-semibold text-neutral-700 border-b-2 border-neutral-200" style={{ minWidth: '60px' }}>
-                  Del
-                </th>
-              </tr>
-            </thead>
+        {/* Info Alert */}
+        <Alert className="border-blue-200 bg-blue-50">
+          <Database className="w-4 h-4 text-blue-600" />
+          <AlertDescription className="text-sm text-blue-900">
+            Product & customer data are taken from Admin Master. Products with schemes will be highlighted in yellow in the final Excel.
+          </AlertDescription>
+        </Alert>
 
-            <tbody>
-              {rows.map((row, i) => {
-                const hasError = rowErrors[i]?.length > 0;
+        {/* Sheets Toolbar */}
+        {rows.length > 0 && (
+          <Card className="p-4 border-purple-100 bg-gradient-to-r from-purple-50/50 to-pink-50/50">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-sm">
+                {selectedRows.length > 0 ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                    <span className="font-medium text-neutral-700">
+                      ✓ {selectedRows.length} product{selectedRows.length > 1 ? 's' : ''} selected
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Package className="w-4 h-4 text-neutral-500" />
+                    <span className="text-neutral-600">Select products to organize into sheets</span>
+                  </>
+                )}
+              </div>
+              <Button
+                onClick={createNewSheet}
+                disabled={selectedRows.length === 0}
+                size="sm"
+                className="gap-2 bg-purple-600 hover:bg-purple-700"
+              >
+                <Gift className="w-4 h-4" />
+                📋 Create Separate Sheet
+              </Button>
+            </div>
 
-                return (
-                  <tr key={i} className={`border-b border-neutral-100 ${hasError ? "bg-red-50" : "hover:bg-neutral-50"}`}>
-                    {/* PRODUCT NAME CELL */}
-                    <td className="px-4 py-3 align-top" style={{ minWidth: '280px' }}>
-                      <div className="space-y-2">
-                        {/* Input field */}
-                        {!row.matchedProduct && (
-                          <div className="relative">
-                            <input
-                              className="w-full border border-neutral-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              value={row.ITEMDESC || ""}
-                              onChange={(e) => {
-                                handleRowChange(i, "ITEMDESC", e.target.value);
-                                handleRowChange(i, "matchedProduct", null);
-                              }}
-                              placeholder="Type product name"
-                            />
-
-                            {/* AUTOCOMPLETE DROPDOWN */}
-                            {row.ITEMDESC?.length >= 2 && (
-                              <div className="absolute z-20 w-full mt-1 bg-white border border-neutral-300 rounded shadow-lg max-h-48 overflow-auto">
-                                {allProducts
-                                 .filter(p => {
-  const normalizeTokens = (text = "") =>
-    text
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, " ")
-      .split(/\s+/)
-      .filter(Boolean);
-
-  const invTokens = normalizeTokens(row.ITEMDESC);
-  const prodTokens = normalizeTokens(p.productName);
-  const baseTokens = normalizeTokens(p.baseName || "");
-
-  if (invTokens.length === 0) return false;
-
-  // ✅ order-independent match (Input subset of Product)
-  const matchForward = invTokens.every(t => prodTokens.includes(t));
-  
-  // ✅ REVERSE match (Product subset of Input) - Fixes "MICROCID 25" -> "MICROCID"
-  // Requires at least a significant overlap (e.g. at least one token matched)
-  const matchBackward = prodTokens.length > 0 && prodTokens.every(t => invTokens.includes(t));
-
-  const matchBase =
-    baseTokens.length > 0 &&
-    invTokens.every(t => baseTokens.includes(t));
-
-  // ✅ BRAND/ROOT Match - Show all variants if the main brand matches
-  // e.g. Input: "MICROCID 25", Product: "MICROCID 50" -> Match on "MICROCID"
-  const matchBrand = invTokens.some(t => 
-    t.length >= 3 &&           // Must be a significant word
-    isNaN(Number(t)) &&        // Not a number
-    prodTokens.includes(t)     // Exists in product
-  );
-
-  return matchForward || matchBackward || matchBase || matchBrand;
-})
-
-                                  .sort((a, b) => {
-                                      // Optional: Prioritize exact matches (forward/backward) over just brand matches
-                                      return 0; // Keep default order for now
-                                  })
-                                  .slice(0, 50)
-                                  .map(p => (
-                                    <button
-                                      key={p._id}
-                                      type="button"
-                                      onClick={() => {
-                                        setRows(prev => {
-                                          const next = [...prev];
-                                          next[i] = {
-                                            ...next[i],
-                                            ITEMDESC: p.productName,
-                                            matchedProduct: p,
-                                            SAPCODE: p.productCode,
-                                            DVN: p.division,
-                                            mappingSource: "MANUAL",
-                                            availableSchemes: []
-                                          };
-                                          
-                                          if (selectedCustomer?.customerCode) {
-                                            api.get(`/orders/schemes/product/${p.productCode}`, {
-                                              params: { 
-                                                customerCode: selectedCustomer.customerCode,
-                                                division: p.division 
-                                              }
-                                            }).then(res => {
-                                              if (res.data?.schemes?.length > 0) {
-                                                setRows(curr => {
-                                                  const updated = [...curr];
-                                                  updated[i] = { ...updated[i], availableSchemes: res.data.schemes };
-                                                  return updated;
-                                                });
-                                                // Toast removed as per user request
-                                              }
-                                            });
-                                          }
-                                          
-                                          return next;
-                                        });
-                                      }}
-                                      className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b last:border-b-0 transition-colors"
-                                    >
-                                    <div className="font-medium text-neutral-800">
-  {formatProductDisplay(p)}
-</div>
-
-                                      <div className="text-xs text-neutral-500">
-                                        {p.productCode} • {p.division}
-                                      </div>
-                                    </button>
-                                  ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* SELECTED PRODUCT DISPLAY */}
-                        {row.matchedProduct && (
-                          <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-green-600 flex-shrink-0">✓</span>
-                                 <span className="text-sm font-medium text-green-800 break-words">
-  {formatProductDisplay(row.matchedProduct)}
-</span>
-
-                                </div>
-                                <span className="text-xs text-green-600 ml-6">
-                                  (mapped)
-                                </span>
-                              </div>
-                              <button
-                                className="text-blue-600 hover:text-blue-700 text-xs font-medium underline whitespace-nowrap flex-shrink-0"
-                                onClick={() => {
-                                  handleRowChange(i, "matchedProduct", null);
-                                }}
-                              >
-                                Change
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Scheme badges removed as per user request (handled in separate modal) */}
-                      </div>
-                    </td>
-
-                    {/* QUANTITY COLUMN */}
-                    <td className="px-4 py-3 text-center align-top" style={{ minWidth: '120px' }}>
-                      <input 
-                        type="number"
-                        className="w-full max-w-[100px] mx-auto border border-neutral-300 rounded px-3 py-2 text-center font-semibold text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        value={row.ORDERQTY || ""}
-                        onChange={(e) => handleRowChange(i, "ORDERQTY", e.target.value)}
-                        placeholder="0"
-                      />
-                    </td>
-
-                    {/* BOX PACK COLUMN */}
-                    <td className="px-4 py-3 text-center align-top" style={{ minWidth: '100px' }}>
-                      <input
-                        type="number"
-                        min="0"
-                        className="w-full max-w-[80px] mx-auto border border-neutral-300 rounded px-2 py-2 text-center text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        value={row["BOX PACK"] || row.matchedProduct?.boxPack || 0}
-                        onChange={(e) => handleRowChange(i, "BOX PACK", e.target.value)}
-                        placeholder="0"
-                      />
-                    </td>
-
-                    {/* PACK COLUMN */}
-                    <td className="px-4 py-3 text-center align-top" style={{ minWidth: '100px' }}>
-                      <input
-                        type="number"
-                        min="0"
-                        className="w-full max-w-[80px] mx-auto border border-neutral-300 rounded px-2 py-2 text-center text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        value={row.PACK || 0}
-                        onChange={(e) => handleRowChange(i, "PACK", e.target.value)}
-                        placeholder="0"
-                      />
-                    </td>
-
-                    {/* DIVISION COLUMN */}
-                    <td className="px-4 py-3 text-center align-top" style={{ minWidth: '100px' }}>
-                      <input
-                        type="text"
-                        className="w-full max-w-[90px] mx-auto border border-neutral-300 rounded px-2 py-2 text-center text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        value={row.DVN || row.matchedProduct?.division || ""}
-                        onChange={(e) => handleRowChange(i, "DVN", e.target.value)}
-                        placeholder="DIV"
-                      />
-                    </td>
-
-                    {/* SHEET COLUMN */}
-                    <td className="px-4 py-3 text-center align-top" style={{ minWidth: '120px' }}>
-                      {(() => {
-                        const sheet = getProductSheet(i);
-                        if (sheet) {
-                          return (
-                            <span className={`inline-flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium ${sheet.color.badge} ${sheet.color.text}`}>
-                              📋 {sheet.name}
-                            </span>
-                          );
-                        } else {
-                          return (
-                            <label className="flex items-center justify-center cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={selectedRows.includes(i)}
-                                onChange={() => toggleRowSelection(i)}
-                                className="w-4 h-4 rounded border-neutral-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                              />
-                            </label>
-                          );
-                        }
-                      })()}
-                    </td>
-
-                    {/* STATUS COLUMN */}
-                    <td className="px-4 py-3 text-center align-top" style={{ minWidth: '80px' }}>
-                      {hasError ? (
-                        <Badge variant="warning">Invalid</Badge>
-                      ) : (
-                        <Badge variant="success">OK</Badge>
-                      )}
-                    </td>
-
-                    {/* DELETE COLUMN */}
-                    <td className="px-4 py-3 text-center align-top" style={{ minWidth: '60px' }}>
+            {sheets.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-purple-200">
+                <div className="text-xs font-medium text-neutral-600 mb-2">Created Sheets:</div>
+                <div className="flex flex-wrap gap-2">
+                  {sheets.map(sheet => (
+                    <div
+                      key={sheet.id}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium ${sheet.color.bg} ${sheet.color.text} ${sheet.color.border} border flex items-center gap-2`}
+                    >
+                      📋 {sheet.name} ({sheet.productIndices.length} products)
                       <button
-                        onClick={() => deleteRow(i)}
-                        className="text-red-600 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors"
-                        title="Remove row"
+                        onClick={() => removeSheet(sheet.id)}
+                        className={`ml-1 ${sheet.color.text} hover:opacity-70`}
+                        title="Remove sheet"
                       >
-                        <X className="w-4 h-4" />
+                        ×
                       </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Card>
+        )}
+
+        {/* Product Table - OPTIMIZED LAYOUT */}
+        <Card className="overflow-hidden border-2 border-neutral-200 shadow-lg">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-gradient-to-r from-neutral-800 to-neutral-700 text-black">
+                  <th className="text-left px-3 py-3 text-xs font-semibold uppercase tracking-wide w-[28%]">
+                    ITEMDESC (Invoice)
+                  </th>
+                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide w-[10%]">
+                    Qty
+                  </th>
+                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide w-[10%]">
+                    Box Pack
+                  </th>
+                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide w-[10%]">
+                    Pack
+                  </th>
+                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide w-[12%]">
+                    Division
+                  </th>
+                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide w-[12%]">
+                    📋 Sheet
+                  </th>
+                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide w-[12%]">
+                    Status
+                  </th>
+                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide w-[6%]">
+                    Del
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedDivisions.map(division => {
+                  const isExpanded = expandedDivisions[division];
+                  const groupRows = groupedData[division];
+
+                  return (
+                    <React.Fragment key={division}>
+                      {/* DIVISION HEADER */}
+                      <tr
+                        onClick={() => toggleDivision(division)}
+                        className="bg-gradient-to-r from-blue-100 to-blue-50 hover:from-blue-200 hover:to-blue-100 cursor-pointer border-y-2 border-blue-300 transition-colors"
+                      >
+                        <td colSpan={8} className="px-3 py-3">
+                          <div className="flex items-center gap-3">
+                            {isExpanded ? (
+                              <ChevronDown className="w-5 h-5 text-blue-700" />
+                            ) : (
+                              <ChevronRight className="w-5 h-5 text-blue-700" />
+                            )}
+                            <span className="font-bold text-blue-900 text-sm uppercase tracking-wide">
+                              {division}
+                            </span>
+                            <Badge className="bg-blue-200 text-blue-800 text-xs">
+                              {groupRows.length} items
+                            </Badge>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* ROWS */}
+                      {isExpanded && groupRows.map(({ row, originalIndex: i }) => {
+                        const hasError = rowErrors[i]?.length > 0;
+                        const sheet = getProductSheet(i);
+
+                        return (
+                          <tr
+                            key={i}
+                            className={`
+                              border-b border-neutral-200 hover:bg-neutral-50 transition-colors
+                              ${hasError ? "bg-red-50" : ""}
+                              ${sheet ? sheet.color.bg : ""}
+                            `}
+                          >
+                            {/* PRODUCT NAME CELL - REDUCED WIDTH */}
+                            <td className="px-3 py-2 align-top">
+                              <div className="space-y-2">
+                                {/* Input or Display Name */}
+                                <div>
+                                  {!row.matchedProduct ? (
+                                    <div className="relative">
+                                      <input
+                                        type="text"
+                                        value={row.ITEMDESC || ""}
+                                        onChange={(e) => {
+                                          handleRowChange(i, "ITEMDESC", e.target.value);
+                                          handleRowChange(i, "matchedProduct", null);
+                                        }}
+                                        placeholder="Search product..."
+                                        className="w-full text-xs border rounded px-2 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                      />
+                                      {/* AUTOCOMPLETE DROPDOWN */}
+                                      {row.ITEMDESC?.length >= 2 && (
+                                        <div className="absolute z-50 w-full mt-1 bg-white border border-neutral-300 rounded-lg shadow-xl max-h-64 overflow-y-auto">
+                                          {allProducts
+                                            .filter(p => {
+                                              const normalizeTokens = (text = "") =>
+                                                text.toUpperCase().replace(/[^A-Z0-9]/g, " ").split(/\s+/).filter(Boolean);
+                                              const invTokens = normalizeTokens(row.ITEMDESC);
+                                              const prodTokens = normalizeTokens(p.productName);
+                                              const baseTokens = normalizeTokens(p.baseName || "");
+
+                                              if (invTokens.length === 0) return false;
+
+                                              const matchForward = invTokens.every(t => prodTokens.includes(t));
+                                              const matchBackward = prodTokens.length > 0 && prodTokens.every(t => invTokens.includes(t));
+                                              const matchBase = baseTokens.length > 0 && invTokens.every(t => baseTokens.includes(t));
+                                              const matchBrand = invTokens.some(t => t.length >= 3 && isNaN(Number(t)) && prodTokens.includes(t));
+
+                                              return matchForward || matchBackward || matchBase || matchBrand;
+                                            })
+                                            .sort((a, b) => 0)
+                                            .slice(0, 50)
+                                            .map(p => (
+                                              <button
+                                                key={p.productCode}
+                                                onClick={() => {
+                                                  setRows(prev => {
+                                                    const next = [...prev];
+                                                    next[i] = {
+                                                      ...next[i],
+                                                      ITEMDESC: p.productName,
+                                                      matchedProduct: p,
+                                                      SAPCODE: p.productCode,
+                                                      DVN: p.division,
+                                                      mappingSource: "MANUAL",
+                                                      availableSchemes: []
+                                                    };
+
+                                                    if (selectedCustomer?.customerCode) {
+                                                      api.get(`/orders/schemes/product/${p.productCode}`, {
+                                                        params: {
+                                                          customerCode: selectedCustomer.customerCode,
+                                                          division: p.division
+                                                        }
+                                                      }).then(res => {
+                                                        if (res.data?.schemes?.length > 0) {
+                                                          setRows(curr => {
+                                                            const updated = [...curr];
+                                                            updated[i] = {
+                                                              ...updated[i],
+                                                              availableSchemes: res.data.schemes
+                                                            };
+                                                            return updated;
+                                                          });
+                                                        }
+                                                      });
+                                                    }
+
+                                                    return next;
+                                                  });
+                                                }}
+                                                className="w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 border-b border-neutral-100 last:border-b-0 transition-colors group/item"
+                                              >
+                                                <div className="font-medium text-neutral-900 group-hover/item:text-blue-700">
+                                                  {formatProductDisplay(p)}
+                                                </div>
+                                                <div className="text-neutral-500 mt-0.5">
+                                                  {p.productCode} • {p.division}
+                                                </div>
+                                              </button>
+                                            ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="text-xs font-medium text-neutral-700 leading-tight">
+                                      {row.ITEMDESC || "(No Name)"}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Mapped Product Info */}
+                                {row.matchedProduct && (
+                                  <div className="flex items-center justify-between gap-2 px-2 py-1.5 bg-green-50 border border-green-200 rounded text-xs">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-semibold text-green-800 truncate">
+                                        {formatProductDisplay(row.matchedProduct)}
+                                      </div>
+                                      <div className="text-green-600 text-[10px]">
+                                        #{row.matchedProduct.productCode}
+                                      </div>
+                                    </div>
+                                    <button
+                                      onClick={() => handleRowChange(i, "matchedProduct", null)}
+                                      title="Change Product"
+                                      className="flex-shrink-0 p-1 hover:bg-green-100 rounded"
+                                    >
+                                      <Edit2 className="w-3 h-3 text-green-700" />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* QUANTITY COLUMN - INCREASED WIDTH */}
+                            <td className="px-3 py-2 text-center">
+                              <input
+                                type="number"
+                                className={`w-full text-center text-sm font-semibold px-2 py-2 border-2 rounded transition-all ${
+                                  hasError
+                                    ? "border-red-500 bg-red-50 text-red-700"
+                                    : (row["BOX PACK"] > 0 && Number(row.ORDERQTY) % Number(row["BOX PACK"]) === 0)
+                                    ? "border-green-300 bg-green-50 text-green-800"
+                                    : "border-neutral-200 bg-white"
+                                }`}
+                                value={row.ORDERQTY || ""}
+                                onChange={(e) => handleRowChange(i, "ORDERQTY", e.target.value)}
+                                placeholder="0"
+                              />
+                            </td>
+
+                            {/* BOX PACK COLUMN - INCREASED WIDTH */}
+                            <td className="px-3 py-2 text-center">
+                              <div className="relative">
+                                <input
+                                  type="number"
+                                  className="w-full text-center text-sm px-2 py-2 border rounded bg-neutral-50"
+                                  value={row["BOX PACK"] || row.matchedProduct?.boxPack || ""}
+                                  onChange={(e) => handleRowChange(i, "BOX PACK", e.target.value)}
+                                />
+                                {Number(row["BOX PACK"] || row.matchedProduct?.boxPack) > 1 && (
+                                  <button
+                                    onClick={() => {
+                                      const boxPack = Number(row["BOX PACK"] || row.matchedProduct?.boxPack || 0);
+                                      const currentQty = Number(row.ORDERQTY || 0);
+                                      if (boxPack > 0 && currentQty > 0) {
+                                        const remainder = currentQty % boxPack;
+                                        const newQty = remainder === 0 ? currentQty : Math.ceil(currentQty / boxPack) * boxPack;
+                                        if (newQty !== currentQty) {
+                                          handleRowChange(i, "ORDERQTY", newQty);
+                                          toast.success(`Rounded to ${newQty}`);
+                                        } else {
+                                          toast.info("Already rounded");
+                                        }
+                                      }
+                                    }}
+                                    className="absolute right-0.5 top-1/2 -translate-y-1/2 p-0.5 text-neutral-300 hover:text-blue-600 transition-colors"
+                                    title="Click to Round Up"
+                                  >
+                                    <RefreshCw className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* PACK COLUMN - INCREASED WIDTH */}
+                            <td className="px-3 py-2 text-center">
+                              <input
+                                type="text"
+                                className="w-full text-center text-sm font-medium px-2 py-2 border rounded bg-blue-50 text-blue-800"
+                                value={row.PACK || ""}
+                                onChange={(e) => handleRowChange(i, "PACK", e.target.value)}
+                              />
+                            </td>
+
+                            {/* DIVISION COLUMN */}
+                            <td className="px-3 py-2 text-center">
+                              <div className="text-xs font-medium text-neutral-700">
+                                {row.matchedProduct?.division || row.DVN || "-"}
+                              </div>
+                            </td>
+
+                            {/* SHEET COLUMN */}
+                            <td className="px-3 py-2 text-center">
+                              {sheet ? (
+                                <Badge className={`${sheet.color.badge} ${sheet.color.text} text-xs`}>
+                                  {sheet.name}
+                                </Badge>
+                              ) : (
+                                <input
+                                  type="checkbox"
+                                  checked={selectedRows.includes(i)}
+                                  onChange={() => toggleRowSelection(i)}
+                                  className="w-4 h-4 cursor-pointer"
+                                />
+                              )}
+                            </td>
+
+                            {/* STATUS COLUMN */}
+                            <td className="px-3 py-2 text-center">
+                              {row.matchedProduct ? (
+                                <Badge className="bg-green-100 text-green-700 text-xs font-semibold">
+                                  <Check className="w-3 h-3 mr-1" />
+                                  OK
+                                </Badge>
+                              ) : (
+                                <Badge variant="warning" className="text-xs">
+                                  Map
+                                </Badge>
+                              )}
+                            </td>
+
+                            {/* DELETE BUTTON */}
+                            <td className="px-3 py-2 text-center">
+                              <button
+                                onClick={() => deleteRow(i)}
+                                className="text-neutral-400 hover:text-red-600 transition-colors p-1"
+                                title="Delete row"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </React.Fragment>
+                  );
+                })}
+
+                {rows.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="text-center py-12 text-neutral-500">
+                      <Package className="w-12 h-12 mx-auto mb-3 text-neutral-300" />
+                      No products added yet.
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* ACTIONS */}
-        <div className="p-4 bg-neutral-50 border-t">
-          <div className="flex justify-between items-center">
-            <Button
-              variant="secondary"
-              onClick={() => navigate(-1)}
-            >
-              ← Back
-            </Button>
-
-            <div className="flex gap-3">
-              <Button 
-          onClick={() => handleConvert(false)} 
-          isLoading={converting}
-          disabled={!selectedCustomer}
-        >
-          <ArrowRight className="w-4 h-4 mr-1" />
-          {converting ? "Converting..." : "Convert to Excel"}
-        </Button>
-            </div>
+                )}
+              </tbody>
+            </table>
           </div>
+        </Card>
+
+        {/* Actions */}
+        <div className="flex justify-center pt-6">
+          <Button
+            onClick={() => handleConvert()}
+            isLoading={converting}
+            className="px-8 py-3 text-lg shadow-lg hover:shadow-xl transition-all"
+          >
+            <Zap className="w-5 h-5 mr-2" />
+            Process Orders
+          </Button>
         </div>
-      </Card>
+      </div>
 
-       {/* 🎁 SCHEME POPUP MODAL (Portal Based) */}
-        <SchemePopup
-            isOpen={showSchemeModal}
-            onClose={() => {
-                setShowSchemeModal(false);
-                setSchemeSuggestions([]);
-            }}
-            suggestions={schemeSuggestions}
-            onApply={applySchemeSuggestion}
-            onSkip={() => {
-                setShowSchemeModal(false);
-                handleConvert(true);
-            }}
-            onDone={() => {
-                setShowSchemeModal(false);
-                handleConvert(true);
-            }}
-        />
-
-       
-
+      {/* SCHEME POPUP */}
+      <SchemePopup
+        isOpen={showSchemeModal}
+        onClose={() => setShowSchemeModal(false)}
+        suggestions={schemeSuggestions}
+        onApply={applySchemeSuggestion}
+        onSkip={() => {
+          setShowSchemeModal(false);
+          handleConvert(true);
+        }}
+        onDone={() => {
+          setShowSchemeModal(false);
+          handleConvert(true);
+        }}
+      />
     </div>
   );
 }

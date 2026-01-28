@@ -108,6 +108,30 @@ export const masterDataApi = {
     return api.delete(`/admin/customers/${id}`);
   },
 
+  uploadCustomers(file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    return api.post("/admin/customers/upload", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+
+  async exportCustomers() {
+    try {
+      const res = await api.get("/admin/customers/export", { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `customers-${Date.now()}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Export failed", err);
+      throw err;
+    }
+  },
+
   /* =====================================
      PRODUCTS
   ===================================== */
@@ -154,6 +178,30 @@ export const masterDataApi = {
     return api.patch("/admin/products/transfer", payload);
   },
 
+  uploadProducts(file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    return api.post("/admin/products/upload", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+
+  async exportProducts() {
+    try {
+      const res = await api.get("/admin/products/export", { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `products-${Date.now()}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Export failed", err);
+      throw err;
+    }
+  },
+
   /* =====================================
      SCHEMES
   ===================================== */
@@ -187,5 +235,30 @@ export const masterDataApi = {
 
   deleteScheme(id: string) {
     return api.delete(`/admin/schemes/${id}`);
+  },
+
+
+  uploadSchemes(file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    return api.post("/admin/schemes/upload", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+
+  async exportSchemes() {
+    try {
+      const res = await api.get("/admin/schemes/export", { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `schemes-${Date.now()}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Export failed", err);
+      throw err;
+    }
   },
 };

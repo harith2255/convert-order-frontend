@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Download, Save, AlertCircle, CheckCircle, RefreshCw } from "lucide-react";
+import { ArrowLeft, Download, Save, AlertCircle, RefreshCw, ChevronDown, ChevronRight, Box } from "lucide-react";
 import { previewConvertedOrders, updateConvertedData, downloadOrderFile } from "../../services/orderApi";
 import { Button } from "../Button";
 import { toast } from "sonner";
@@ -46,6 +46,9 @@ export function EditOrdersPage() {
   const [total, setTotal] = useState(0);
   const limit = 100;
 
+  // Grouping State
+  const [expandedDivisions, setExpandedDivisions] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     if (id) fetchData();
   }, [id, page]);
@@ -72,6 +75,19 @@ export function EditOrdersPage() {
         } else if (response.data?.length > 0) {
           setHeaders(Object.keys(response.data[0]));
         }
+
+        // Auto-expand all divisions initially? Or Start collapsed?
+        // Let's start collapsed or expanded based on preference. 
+        // User asked for dropdown like, implying collapsed or at least toggleable.
+        // Usually starting expanded is friendlier for editing immediately.
+        // Let's mimic previous behavior: start with all Expanded for visibility? 
+        // Or collapsed? "when we click the + icon ... it show all products" implies they are hidden first.
+        // I will start with them collapsed (empty object) or I can pre-fill true.
+        // Let's start Collapsed to match "click to open" request behavior strictly.
+        // Wait, if I start collapsed, the page looks empty. That might be bad UX.
+        // User said: "minimise or hide ... easy for user add that when clicking it should be open"
+        // I'll start with all COLLAPSED (false) so they see just divisions.
+        setExpandedDivisions({}); 
       }
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to load data");
@@ -129,6 +145,30 @@ export function EditOrdersPage() {
       navigate(-1);
     }
   };
+
+  const toggleDivision = (division: string) => {
+    setExpandedDivisions(prev => ({
+        ...prev,
+        [division]: !prev[division]
+    }));
+  };
+
+  // Group Data Logic
+  // We need to preserve the original index for editing
+  const groupedData = React.useMemo(() => {
+    const groups: Record<string, { row: any, originalIndex: number }[]> = {};
+    
+    data.forEach((row, index) => {
+        // Try multiple fields for Division
+        const div = row.DVN || row.Division || row.DIVISION || row.division || row.dvn || "Unassigned";
+        if (!groups[div]) groups[div] = [];
+        groups[div].push({ row, originalIndex: index });
+    });
+
+    return groups;
+  }, [data]);
+
+  const sortedDivisions = Object.keys(groupedData).sort();
 
   if (loading) {
     return (
@@ -193,7 +233,7 @@ export function EditOrdersPage() {
       <div className="flex-1 overflow-auto p-4">
         <div className="bg-white rounded-lg border border-neutral-200 overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-neutral-100 sticky top-0">
+            <thead className="bg-neutral-100 sticky top-0 z-10">
               <tr>
                 {headers.map((header) => (
                   <th
@@ -206,20 +246,53 @@ export function EditOrdersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
-              {data.map((row, rowIndex) => (
-                <tr key={rowIndex} className="hover:bg-neutral-50">
-                  {headers.map((header) => (
-                    <td key={header} className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={row[header] || ""}
-                        onChange={(e) => handleCellEdit(rowIndex, header, e.target.value)}
-                        className="w-full min-w-[80px] px-2 py-1.5 text-sm border border-neutral-200 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                      />
-                    </td>
-                  ))}
-                </tr>
-              ))}
+              {sortedDivisions.map(division => {
+                  const isExpanded = expandedDivisions[division];
+                  const groupRows = groupedData[division];
+                  
+                  return (
+                    <React.Fragment key={division}>
+                        {/* DIVISION HEADER */}
+                         <tr 
+                            className="bg-neutral-50 hover:bg-neutral-100 cursor-pointer transition-colors border-b border-neutral-200"
+                            onClick={() => toggleDivision(division)}
+                        >
+                            <td colSpan={headers.length} className="p-2">
+                                <div className="flex items-center gap-2 font-semibold text-neutral-800">
+                                    {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                    <Box className="w-4 h-4 text-blue-600" />
+                                    {division} 
+                                    <Badge variant="neutral" className="ml-2 text-xs">{groupRows.length} items</Badge>
+                                </div>
+                            </td>
+                        </tr>
+
+                        {/* ROWS */}
+                        {isExpanded && groupRows.map(({ row, originalIndex }) => (
+                            <tr key={originalIndex} className="hover:bg-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                                {headers.map((header) => (
+                                    <td key={header} className="px-3 py-2">
+                                    <input
+                                        type="text"
+                                        value={row[header] || ""}
+                                        onChange={(e) => handleCellEdit(originalIndex, header, e.target.value)}
+                                        className="w-full min-w-[80px] px-2 py-1.5 text-sm border border-neutral-200 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    />
+                                    </td>
+                                ))}
+                            </tr>
+                        ))}
+                    </React.Fragment>
+                  );
+              })}
+
+              {data.length === 0 && (
+                  <tr>
+                      <td colSpan={headers.length} className="text-center p-8 text-neutral-500">
+                          No data found
+                      </td>
+                  </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -230,7 +303,10 @@ export function EditOrdersPage() {
         <div className="flex-shrink-0 bg-white border-t border-neutral-200 px-4 py-3">
           <div className="flex items-center justify-center gap-4">
             <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
+              onClick={() => {
+                  setPage(p => Math.max(1, p - 1));
+                  setExpandedDivisions({}); // Collapse all on page change
+              }}
               disabled={page === 1}
               className="px-4 py-2 bg-neutral-100 text-neutral-700 rounded hover:bg-neutral-200 disabled:opacity-50"
             >
@@ -240,7 +316,10 @@ export function EditOrdersPage() {
               Page {page} of {totalPages}
             </span>
             <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              onClick={() => {
+                  setPage(p => Math.min(totalPages, p + 1));
+                  setExpandedDivisions({}); // Collapse all on page change
+              }}
               disabled={page === totalPages}
               className="px-4 py-2 bg-neutral-100 text-neutral-700 rounded hover:bg-neutral-200 disabled:opacity-50"
             >
@@ -251,4 +330,20 @@ export function EditOrdersPage() {
       )}
     </div>
   );
+}
+
+// Simple Badge component inline or referenced if available. 
+// I'll assume Badge exists as it was in ResultPage.
+function Badge({ children, variant = "neutral", className = "" }: any) {
+    const variants: any = {
+        neutral: "bg-gray-100 text-gray-800",
+        success: "bg-green-100 text-green-800",
+        warning: "bg-yellow-100 text-yellow-800",
+        error: "bg-red-100 text-red-800",
+    };
+    return (
+        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${variants[variant]} ${className}`}>
+            {children}
+        </span>
+    );
 }

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Upload, Download, AlertTriangle, CheckCircle, Database } from "lucide-react";
+import { Upload, Download, Database } from "lucide-react";
 import { Card } from "../Card";
 import { Button } from "../Button";
 import { Badge } from "../Badge";
@@ -12,12 +12,8 @@ import { SchemeTable } from "../admin/SchemeTable";
 export function MasterDataPage() {
 
   const [dbFile, setDbFile] = useState<File | null>(null);
-
   const [loadingDb, setLoadingDb] = useState(false);
   const [exporting, setExporting] = useState(false);
-
-
-
 
   /* ===========================
      DATABASE OPERATIONS
@@ -69,8 +65,6 @@ export function MasterDataPage() {
           </p>
         </div>
       </Card>
-
-
 
       <Card>
         <div className="flex justify-between items-center mb-4">
@@ -129,11 +123,9 @@ export function MasterDataPage() {
         </div>
       </Card>
 
-
-
       <CustomerTable />
-<ProductManagement />
-<SchemeTable />
+      <ProductManagement />
+      <SchemeTable />
 
     </div>
   );
