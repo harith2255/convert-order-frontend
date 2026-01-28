@@ -902,9 +902,9 @@ export function MappingPage() {
                                               title="Click to change product"
                                             >
                                               <div className="flex-1 min-w-0">
-                                                <div className="text-sm font-semibold text-neutral-900 truncate" title={row.matchedProduct.productName}>
-                                            {formatProductDisplay(row.matchedProduct)}
-                                        </div>
+                                                <div className="font-bold text-green-900 truncate text-xs">
+                                                  {formatProductDisplay(row.matchedProduct)}
+                                                </div>
                                                 <div className="text-green-700 text-[10px] opacity-80">
                                                   #{row.matchedProduct.productCode}
                                                 </div>
@@ -957,7 +957,7 @@ export function MappingPage() {
                                                          }}
                                                          title={`Add ${next.minQty - (Number(row.ORDERQTY)||0)} to get ${next.minQty} + ${next.freeQty} Free`}
                                                     >
-                                                         <Gift className="w-3 h-3 text-blue-500" />
+                                                         <Zap className="w-3 h-3 text-blue-500 fill-blue-500" />
                                                          <span className="truncate">
                                                             Add {next.minQty - (Number(row.ORDERQTY)||0)} → <span className="font-bold">{next.freeQty} Free</span>
                                                          </span>
