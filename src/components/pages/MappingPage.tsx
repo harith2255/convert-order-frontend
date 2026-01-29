@@ -115,6 +115,7 @@ export function MappingPage() {
   const [counts, setCounts] = useState({ products: 0, customers: 0 });
   const [loadingCounts, setLoadingCounts] = useState(true);
   const [activeEditRow, setActiveEditRow] = useState<number | null>(null);
+  const [activeSearchRow, setActiveSearchRow] = useState<number | null>(null);
 
   /* ✅ MASTER PRODUCTS FOR MANUAL MAPPING */
   const [allProducts, setAllProducts] = useState<any[]>([]);
@@ -200,6 +201,21 @@ export function MappingPage() {
 
     return () => clearTimeout(timer);
   }, [customerInput]);
+
+  /* ---------------- CLICK OUTSIDE TO CLOSE SUGGESTIONS ---------------- */
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (activeSearchRow === null) return;
+      const target = e.target as HTMLElement;
+      // If click is NOT inside the active cell wrapper
+      if (!target.closest(`#cell-search-${activeSearchRow}`)) {
+        setActiveSearchRow(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [activeSearchRow]);
 
   /* ---------------- INIT ---------------- */
   useEffect(() => {
@@ -859,26 +875,24 @@ export function MappingPage() {
                                 <td className="px-3 py-1 align-top">
                                   <div className="flex flex-col gap-1">
                                     {/* Edit Mode / Search */}
-                                    <div className="w-full">
+                                    <div className="w-full" id={`cell-search-${i}`}>
                                       {!row.matchedProduct ? (
                                         <div className="relative">
                                           <input
                                             type="text"
-                                            value={row.ITEMDESC || ""} // Initialize search with invoice text if trying to map manually
+                                            value={row.ITEMDESC || ""}
                                             onChange={(e) => {
-                                              // We might want to separate search term from row.ITEMDESC if we want to preserve original
-                                              // But typically manual mapping replaces the "search key". 
-                                              // For now, let's keep it bound to ITEMDESC or a temp search field?
-                                              // The previous code bound it to ITEMDESC. Let's stick to that to avoid breaking logic, 
-                                              // although it modifies the invoice item text effectively.
                                               handleRowChange(i, "ITEMDESC", e.target.value);
                                               handleRowChange(i, "matchedProduct", null);
                                             }}
+                                            onFocus={() => setActiveSearchRow(i)}
+                                            onClick={() => setActiveSearchRow(i)}
+                                            // onBlur removed - handled by global click listener
                                             placeholder="Search master product..."
                                             className="w-full text-base border rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                           />
                                           {/* AUTOCOMPLETE DROPDOWN */}
-                                          {row.ITEMDESC?.length >= 2 && (
+                                          {activeSearchRow === i && row.ITEMDESC?.length >= 2 && (
                                             <div className="absolute z-50 w-full mt-1 bg-white border border-neutral-300 rounded-lg shadow-xl max-h-64 overflow-y-auto">
                                               {allProducts
                                                 .filter(p => {
@@ -890,14 +904,39 @@ export function MappingPage() {
 
                                                   if (invTokens.length === 0) return false;
 
+                                                  // STRICTER MATCHING LOGIC
+                                                  
+                                                  // 1. All search words exist in product (e.g. "Dolo 650" -> "Dolo 650mg")
                                                   const matchForward = invTokens.every(t => prodTokens.includes(t));
+                                                  
+                                                  // 2. All product words exist in search (e.g. "Dolo" -> "Dolo 650")
                                                   const matchBackward = prodTokens.length > 0 && prodTokens.every(t => invTokens.includes(t));
+                                                  
+                                                  // 3. Base Name Match
                                                   const matchBase = baseTokens.length > 0 && invTokens.every(t => baseTokens.includes(t));
-                                                  const matchBrand = invTokens.some(t => t.length >= 3 && isNaN(Number(t)) && prodTokens.includes(t));
+                                                  
+                                                  // 4. FIRST WORD MATCH (Crucial for "NULONG TRIO" vs "AMLONG TRIO")
+                                                  // We require the FIRST significant word of the search to be present OR partially match.
+                                                  // "MECONERVE" should match "MECONERV"
+                                                  // "NULONG" should NOT match "AMLONG"
+                                                  const firstSignificant = invTokens.find(t => isNaN(Number(t)) && t.length >= 3);
+                                                  const matchPrimary = firstSignificant && prodTokens.some(pt => 
+                                                    pt.includes(firstSignificant) || firstSignificant.includes(pt)
+                                                  );
 
-                                                  return matchForward || matchBackward || matchBase || matchBrand;
+                                                  return matchForward || matchBackward || matchBase || matchPrimary;
                                                 })
-                                                .sort((a, b) => 0)
+                                                .sort((a, b) => {
+                                                    // Sort by relevance (exact first word match gets priority)
+                                                    const normalizeTokens = (text = "") => text.toUpperCase().replace(/[^A-Z0-9]/g, " ").split(/\s+/).filter(Boolean);
+                                                    const invTokens = normalizeTokens(row.ITEMDESC);
+                                                    const firstToken = invTokens.find(t => isNaN(Number(t)) && t.length >= 3) || "_____"; // Safe fallback that won't match
+
+                                                    const aHas = normalizeTokens(a.productName).includes(firstToken) ? 1 : 0;
+                                                    const bHas = normalizeTokens(b.productName).includes(firstToken) ? 1 : 0;
+                                                    
+                                                    return bHas - aHas; 
+                                                })
                                                 .slice(0, 50)
                                                 .map(p => (
                                                   <button
