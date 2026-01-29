@@ -302,6 +302,7 @@ export function MappingPage() {
       ...prev,
       { ITEMDESC: "", ORDERQTY: "", manualProduct: null, isNew: true }
     ]);
+    toast.success("New item added row created");
   };
 
   const deleteRow = (index: number) => {
@@ -622,10 +623,7 @@ export function MappingPage() {
             </div>
           </div>
           
-          <Button onClick={addRow} variant="secondary" size="sm" className="gap-2">
-            <Package className="w-4 h-4" />
-            + Add Item
-          </Button>
+         
         </div>
 
         {/* Customer Selection Card */}
@@ -787,7 +785,12 @@ export function MappingPage() {
             )}
           </Card>
         )}
-
+        <div className="flex justify-end">
+          <Button onClick={addRow} variant="secondary" size="sm" className="gap-2">
+            <Package className="w-4 h-4" />
+            + Add Item
+          </Button>
+        </div>
         {/* Product Table - OPTIMIZED LAYOUT */}
         <Card className="overflow-hidden border-2 border-neutral-200 shadow-lg">
           <div className="overflow-x-auto">
@@ -866,13 +869,13 @@ export function MappingPage() {
                               ${sheet ? sheet.color.bg : ""}
                             `}
                           >
-                                {/* NEW COLUMN 1: INVOICE ITEM */}
-                                <td className="px-3 py-1 align-top text-base font-medium text-neutral-800 break-words">
-                                    {row.ITEMDESC || "(No Name)"}
+                              {/* NEW COLUMN 1: INVOICE ITEM */}
+                                <td className="px-2 py-0.5 align-middle text-sm font-medium text-neutral-800 break-words">
+                                    {row._rawText || row.ITEMDESC || "(No Name)"}
                                 </td>
 
                                 {/* NEW COLUMN 2: MAPPED PRODUCT (Search & Result) */}
-                                <td className="px-3 py-1 align-top">
+                                <td className="px-2 py-0.5 align-middle">
                                   <div className="flex flex-col gap-1">
                                     {/* Edit Mode / Search */}
                                     <div className="w-full" id={`cell-search-${i}`}>
@@ -904,21 +907,26 @@ export function MappingPage() {
 
                                                   if (invTokens.length === 0) return false;
 
-                                                  // STRICTER MATCHING LOGIC
+                                                  // STRICTER MATCHING LOGIC (Improved for Partial Matches)
                                                   
-                                                  // 1. All search words exist in product (e.g. "Dolo 650" -> "Dolo 650mg")
-                                                  const matchForward = invTokens.every(t => prodTokens.includes(t));
+                                                  // 1. All search words exist in product (Forward)
+                                                  // Allow partial: "25" matches "25MG"
+                                                  const matchForward = invTokens.every(it => 
+                                                      prodTokens.some(pt => pt.includes(it) || it.includes(pt))
+                                                  );
                                                   
-                                                  // 2. All product words exist in search (e.g. "Dolo" -> "Dolo 650")
-                                                  const matchBackward = prodTokens.length > 0 && prodTokens.every(t => invTokens.includes(t));
+                                                  // 2. All product words exist in search (Backward)
+                                                  // IMPORTANT: "25" in DB product must be found in "25MG" of search
+                                                  const matchBackward = prodTokens.length > 0 && prodTokens.every(pt => 
+                                                      invTokens.some(it => it.includes(pt) || pt.includes(it))
+                                                  );
                                                   
                                                   // 3. Base Name Match
-                                                  const matchBase = baseTokens.length > 0 && invTokens.every(t => baseTokens.includes(t));
+                                                  const matchBase = baseTokens.length > 0 && invTokens.every(it => 
+                                                      baseTokens.some(bt => bt.includes(it) || it.includes(bt))
+                                                  );
                                                   
-                                                  // 4. FIRST WORD MATCH (Crucial for "NULONG TRIO" vs "AMLONG TRIO")
-                                                  // We require the FIRST significant word of the search to be present OR partially match.
-                                                  // "MECONERVE" should match "MECONERV"
-                                                  // "NULONG" should NOT match "AMLONG"
+                                                  // 4. FIRST WORD MATCH (Crucial fallback)
                                                   const firstSignificant = invTokens.find(t => isNaN(Number(t)) && t.length >= 3);
                                                   const matchPrimary = firstSignificant && prodTokens.some(pt => 
                                                     pt.includes(firstSignificant) || firstSignificant.includes(pt)
@@ -944,6 +952,17 @@ export function MappingPage() {
                                                     onClick={() => {
                                                       setRows(prev => {
                                                         const next = [...prev];
+                                                        
+                                                        // 🔥 UX IMPROVEMENT: Check if this is a manually added row (no extracted text)
+                                                        const isManualRow = !next[i]._rawText;
+                                                        
+                                                        if (isManualRow) {
+                                                            // Auto-fill Extracted Name so column 1 isn't empty
+                                                            next[i]._rawText = p.productName; 
+                                                            next[i].ITEMDESC = p.productName;
+                                                            toast.success(`Added & Mapped: ${p.productName}`);
+                                                        }
+
                                                         next[i] = {
                                                           ...next[i],
                                                           matchedProduct: p,
@@ -1109,7 +1128,7 @@ export function MappingPage() {
                             </td>
 
                             {/* QUANTITY COLUMN - INCREASED WIDTH */}
-                            <td className="px-3 py-1 text-center">
+                            <td className="px-2 py-0.5 text-center align-middle">
                               {(() => {
                                  const info = getSchemeInfo(row);
                                  // Show "50 + 10" text ONLY if scheme is APPLIED and not currently editing
@@ -1117,7 +1136,7 @@ export function MappingPage() {
                                      return (
                                          <div 
                                           onClick={() => setActiveEditRow(i)}
-                                          className="w-full text-center text-base font-bold text-green-700 bg-green-50 px-2 py-1 border-2 border-green-200 rounded cursor-text flex items-center justify-center gap-1 h-[34px]"
+                                          className="w-full text-center text-sm font-bold text-green-700 bg-green-50 px-1 py-0.5 border-2 border-green-200 rounded cursor-text flex items-center justify-center gap-1 h-[28px]"
                                           title="Click to edit quantity"
                                         >
                                            {row.ORDERQTY} <span className="text-xs text-green-500">+</span> {info.active.totalFree}
@@ -1134,7 +1153,7 @@ export function MappingPage() {
                                       onKeyDown={(e) => {
                                           if(e.key === 'Enter') setActiveEditRow(null);
                                       }}
-                                      className={`w-full text-center text-base font-semibold px-2 py-1 border-2 rounded transition-all h-[34px] ${
+                                      className={`w-full text-center text-sm font-semibold px-1 py-0.5 border-2 rounded transition-all h-[28px] ${
                                         hasError
                                           ? "border-red-500 bg-red-50 text-red-700"
                                           : (row["BOX PACK"] > 0 && Number(row.ORDERQTY) % Number(row["BOX PACK"]) === 0)
@@ -1150,14 +1169,14 @@ export function MappingPage() {
                             </td>
 
                             {/* BOX PACK COLUMN - INCREASED WIDTH */}
-                            <td className="px-3 py-1 text-center">
-                              <div className="relative">
-                                <input
-                                  type="number"
-                                  className="w-full text-center text-base px-2 py-1 border rounded bg-neutral-50"
-                                  value={row["BOX PACK"] || row.matchedProduct?.boxPack || ""}
-                                  onChange={(e) => handleRowChange(i, "BOX PACK", e.target.value)}
-                                />
+                            <td className="px-3 py-0.5 text-center align-middle">
+                              <div className="flex items-center justify-center gap-2">
+                                  <input
+                                    type="number"
+                                    className="w-16 text-center text-sm px-1 py-0.5 border rounded bg-neutral-50 h-[28px]"
+                                    value={row["BOX PACK"] || row.matchedProduct?.boxPack || ""}
+                                    onChange={(e) => handleRowChange(i, "BOX PACK", e.target.value)}
+                                  />
                                 {Number(row["BOX PACK"] || row.matchedProduct?.boxPack) > 1 && (
                                   <button
                                     onClick={() => {
@@ -1174,34 +1193,34 @@ export function MappingPage() {
                                         }
                                       }
                                     }}
-                                    className="absolute right-0.5 top-1/2 -translate-y-1/2 p-0.5 text-neutral-300 hover:text-blue-600 transition-colors"
+                                    className="p-1 text-neutral-400 hover:text-blue-600 transition-colors"
                                     title="Click to Round Up"
                                   >
-                                    <RefreshCw className="w-3 h-3" />
+                                    <RefreshCw className="w-3.5 h-3.5" />
                                   </button>
                                 )}
                               </div>
                             </td>
 
                             {/* PACK COLUMN - INCREASED WIDTH */}
-                            <td className="px-3 py-1 text-center">
-                              <input
-                                type="text"
-                                className="w-full text-center text-base font-medium px-2 py-1 border rounded bg-blue-50 text-blue-800"
-                                value={row.PACK || ""}
-                                onChange={(e) => handleRowChange(i, "PACK", e.target.value)}
-                              />
+                            <td className="px-2 py-0.5 text-center align-middle">
+                                <input
+                                  type="text"
+                                  className="w-full text-center text-sm font-medium px-1 py-0.5 border rounded bg-blue-50 text-blue-800 h-[28px]"
+                                  value={row.PACK || ""}
+                                  onChange={(e) => handleRowChange(i, "PACK", e.target.value)}
+                                />
                             </td>
 
                             {/* DIVISION COLUMN */}
-                            <td className="px-3 py-1 text-center">
+                            <td className="px-2 py-0.5 text-center align-middle">
                               <div className="text-base font-medium text-neutral-700">
                                 {row.matchedProduct?.division || row.DVN || "-"}
                               </div>
                             </td>
 
                             {/* SHEET COLUMN */}
-                            <td className="px-3 py-1 text-center">
+                            <td className="px-2 py-0.5 text-center align-middle">
                               {sheet ? (
                                 <Badge className={`${sheet.color.badge} ${sheet.color.text} text-base`}>
                                   {sheet.name}
@@ -1217,7 +1236,7 @@ export function MappingPage() {
                             </td>
 
                             {/* STATUS COLUMN */}
-                            <td className="px-3 py-1 text-center">
+                            <td className="px-2 py-0.5 text-center align-middle">
                               {row.matchedProduct ? (
                                 <Badge className="bg-green-100 text-green-700 text-base font-semibold">
                                   <Check className="w-3 h-3 mr-1" />
@@ -1231,7 +1250,7 @@ export function MappingPage() {
                             </td>
 
                             {/* DELETE BUTTON */}
-                            <td className="px-3 py-1 text-center">
+                            <td className="px-2 py-0.5 text-center align-middle">
                               <button
                                 onClick={() => deleteRow(i)}
                                 className="text-neutral-400 hover:text-red-600 transition-colors p-1"
