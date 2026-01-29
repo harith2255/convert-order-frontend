@@ -113,6 +113,7 @@ export function MappingPage() {
   /* 📊 MASTER DATA COUNTS */
   const [counts, setCounts] = useState({ products: 0, customers: 0 });
   const [loadingCounts, setLoadingCounts] = useState(true);
+  const [activeEditRow, setActiveEditRow] = useState<number | null>(null);
 
   /* ✅ MASTER PRODUCTS FOR MANUAL MAPPING */
   const [allProducts, setAllProducts] = useState<any[]>([]);
@@ -509,12 +510,18 @@ export function MappingPage() {
     try {
       setConverting(true);
 
-      const cleanRows = rows.map(r => ({
-        ...r,
-        ORDERQTY: Number(r.ORDERQTY) || 0,
-        matchedProduct: r.matchedProduct ? { ...r.matchedProduct } : null,
-        ITEMDESC: r.matchedProduct ? formatProductDisplay(r.matchedProduct) : r.ITEMDESC
-      }));
+      const cleanRows = rows.map(r => {
+        const schemeInfo = r.schemeApplied ? getSchemeInfo(r) : null;
+        return {
+          ...r,
+          ORDERQTY: Number(r.ORDERQTY) || 0,
+          matchedProduct: r.matchedProduct ? { ...r.matchedProduct } : null,
+          ITEMDESC: r.matchedProduct ? formatProductDisplay(r.matchedProduct) : r.ITEMDESC,
+          // 🔥 PASS STORED SCHEME VALUES TO BACKEND (Source of Truth)
+          freeQty: schemeInfo?.active ? schemeInfo.active.totalFree : 0,
+          schemePercent: schemeInfo?.active?.schemePercent || 0
+        };
+      });
 
       const res = await api.post("/orders/convert", {
         uploadId,
@@ -546,15 +553,58 @@ export function MappingPage() {
   const sortedDivisions = Object.keys(groupedData).sort();
 
   /* ---------------- RENDER ---------------- */
+  // UNIVERSAL ROUND OFF
+  const handleUniversalRoundOff = () => {
+    let updatedCount = 0;
+    setRows(prevRows => {
+      return prevRows.map(row => {
+        const boxPack = Number(row["BOX PACK"] || row.matchedProduct?.boxPack || 0);
+        const currentQty = Number(row.ORDERQTY || 0);
+        
+        if (boxPack > 0 && currentQty > 0) {
+          const remainder = currentQty % boxPack;
+          if (remainder !== 0) {
+            const newQty = Math.ceil(currentQty / boxPack) * boxPack;
+            updatedCount++;
+            
+            // Calculate new PACK
+            const newPack = newQty / boxPack;
+            const finalPack = Number.isInteger(newPack) ? newPack : Number(newPack.toFixed(2));
+
+            return { ...row, ORDERQTY: newQty, PACK: finalPack };
+          }
+        }
+        return row;
+      });
+    });
+
+    if (updatedCount > 0) {
+      toast.success(`Rounded off ${updatedCount} products to nearest box pack`);
+    } else {
+      toast.info("All products are already rounded");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-neutral-50 via-white to-blue-50/30 p-6">
       <div className="max-w-[1600px] mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-neutral-900">Review Order Quantities</h1>
-            <p className="text-neutral-600 mt-1">Verify products and quantities before processing</p>
+            <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-neutral-900 to-neutral-600">
+              Map Products
+            </h1>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-sm text-neutral-500 font-medium">
+                {rows.length} Items
+              </span>
+              <span className="w-1 h-1 bg-neutral-300 rounded-full"></span>
+              <span className="text-sm text-neutral-400">
+                {rows.filter(r => r.matchedProduct).length} Mapped
+              </span>
+            </div>
           </div>
+          
           <Button onClick={addRow} variant="secondary" size="sm" className="gap-2">
             <Package className="w-4 h-4" />
             + Add Item
@@ -567,7 +617,7 @@ export function MappingPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <User className="w-5 h-5 text-blue-600" />
-                <h2 className="text-lg font-semibold text-neutral-900">
+                <h2 className="text-base font-semibold text-neutral-900">
                   Select Customer (Admin Master)
                 </h2>
               </div>
@@ -590,7 +640,7 @@ export function MappingPage() {
                   setSelectedCustomer(null);
                 }}
                 placeholder="Search customer by name or code"
-                className="w-full border rounded px-3 py-2 pr-10 text-sm"
+                className="w-full border rounded px-3 py-2 pr-10 text-base"
                 disabled={autoCustomerLocked.current && selectedCustomer}
               />
               {searching && (
@@ -617,10 +667,10 @@ export function MappingPage() {
                   <button
                     key={c.customerCode}
                     onClick={() => handleCustomerSelect(c)}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b last:border-b-0"
+                    className="w-full text-left px-3 py-2 text-base hover:bg-blue-50 border-b last:border-b-0"
                   >
                     <div className="font-medium text-neutral-900">{c.customerName}</div>
-                    <div className="text-xs text-neutral-500 mt-0.5">
+                    <div className="text-base text-neutral-500 mt-0.5">
                       Code: {c.customerCode}
                       {(c.city || c.state) && (
                         <span> • {c.city || c.state}</span>
@@ -635,7 +685,7 @@ export function MappingPage() {
               <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
                 <div>
                   <div className="font-medium text-green-900">{selectedCustomer.customerName}</div>
-                  <div className="text-xs text-green-700 mt-0.5">
+                  <div className="text-base text-green-700 mt-0.5">
                     Code: {selectedCustomer.customerCode}
                     {(selectedCustomer.city || selectedCustomer.state) && (
                       <span> • {selectedCustomer.city || selectedCustomer.state}</span>
@@ -661,7 +711,7 @@ export function MappingPage() {
         {/* Info Alert */}
         <Alert className="border-blue-200 bg-blue-50">
           <Database className="w-4 h-4 text-blue-600" />
-          <AlertDescription className="text-sm text-blue-900">
+          <AlertDescription className="text-base text-blue-900">
             Product & customer data are taken from Admin Master. Products with schemes will be highlighted in yellow in the final Excel.
           </AlertDescription>
         </Alert>
@@ -670,7 +720,7 @@ export function MappingPage() {
         {rows.length > 0 && (
           <Card className="p-4 border-purple-100 bg-gradient-to-r from-purple-50/50 to-pink-50/50">
             <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2 text-sm">
+              <div className="flex items-center gap-2 text-base">
                 {selectedRows.length > 0 ? (
                   <>
                     <CheckCircle2 className="w-4 h-4 text-green-600" />
@@ -698,12 +748,12 @@ export function MappingPage() {
 
             {sheets.length > 0 && (
               <div className="mt-4 pt-4 border-t border-purple-200">
-                <div className="text-xs font-medium text-neutral-600 mb-2">Created Sheets:</div>
+                <div className="text-base font-medium text-neutral-600 mb-2">Created Sheets:</div>
                 <div className="flex flex-wrap gap-2">
                   {sheets.map(sheet => (
                     <div
                       key={sheet.id}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium ${sheet.color.bg} ${sheet.color.text} ${sheet.color.border} border flex items-center gap-2`}
+                      className={`px-3 py-1.5 rounded-full text-base font-medium ${sheet.color.bg} ${sheet.color.text} ${sheet.color.border} border flex items-center gap-2`}
                     >
                       📋 {sheet.name} ({sheet.productIndices.length} products)
                       <button
@@ -727,28 +777,31 @@ export function MappingPage() {
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-gradient-to-r from-neutral-800 to-neutral-700 text-black">
-                  <th className="text-left px-3 py-3 text-xs font-semibold uppercase tracking-wide w-[28%]">
-                    ITEMDESC (Invoice)
+                  <th className="text-left px-3 py-3 text-base font-semibold uppercase tracking-wide w-[20%]">
+                    Invoice Item
                   </th>
-                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide w-[10%]">
+                  <th className="text-left px-3 py-3 text-base font-semibold uppercase tracking-wide w-[25%]">
+                    Mapped Product
+                  </th>
+                  <th className="text-center px-3 py-3 text-base font-semibold uppercase tracking-wide w-[8%]">
                     Qty
                   </th>
-                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide w-[10%]">
+                  <th className="text-center px-3 py-3 text-base font-semibold uppercase tracking-wide w-[8%]">
                     Box Pack
                   </th>
-                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide w-[10%]">
+                  <th className="text-center px-3 py-3 text-base font-semibold uppercase tracking-wide w-[8%]">
                     Pack
                   </th>
-                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide w-[12%]">
+                  <th className="text-center px-3 py-3 text-base font-semibold uppercase tracking-wide w-[10%]">
                     Division
                   </th>
-                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide w-[12%]">
+                  <th className="text-center px-3 py-3 text-base font-semibold uppercase tracking-wide w-[10%]">
                      Sheet
                   </th>
-                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide w-[12%]">
+                  <th className="text-center px-3 py-3 text-base font-semibold uppercase tracking-wide w-[8%]">
                     Status
                   </th>
-                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide w-[6%]">
+                  <th className="text-center px-3 py-3 text-base font-semibold uppercase tracking-wide w-[3%]">
                     Del
                   </th>
                 </tr>
@@ -765,17 +818,17 @@ export function MappingPage() {
                         onClick={() => toggleDivision(division)}
                         className="bg-gradient-to-r from-blue-100 to-blue-50 hover:from-blue-200 hover:to-blue-100 cursor-pointer border-y-2 border-blue-300 transition-colors"
                       >
-                        <td colSpan={8} className="px-3 py-3">
+                        <td colSpan={9} className="px-3 py-3">
                           <div className="flex items-center gap-3">
                             {isExpanded ? (
                               <ChevronDown className="w-5 h-5 text-blue-700" />
                             ) : (
                               <ChevronRight className="w-5 h-5 text-blue-700" />
                             )}
-                            <span className="font-bold text-blue-900 text-sm uppercase tracking-wide">
+                            <span className="font-bold text-blue-900 text-base uppercase tracking-wide">
                               {division}
                             </span>
-                            <Badge className="bg-blue-200 text-blue-800 text-xs">
+                            <Badge className="bg-blue-200 text-blue-800 text-base">
                               {groupRows.length} items
                             </Badge>
                           </div>
@@ -796,22 +849,32 @@ export function MappingPage() {
                               ${sheet ? sheet.color.bg : ""}
                             `}
                           >
-                                {/* PRODUCT NAME CELL - REDUCED WIDTH */}
-                                <td className="px-3 py-2 align-top">
+                                {/* NEW COLUMN 1: INVOICE ITEM */}
+                                <td className="px-3 py-1 align-top text-base font-medium text-neutral-800 break-words">
+                                    {row.ITEMDESC || "(No Name)"}
+                                </td>
+
+                                {/* NEW COLUMN 2: MAPPED PRODUCT (Search & Result) */}
+                                <td className="px-3 py-1 align-top">
                                   <div className="flex flex-col gap-1">
-                                    {/* Extracted Name Section */}
+                                    {/* Edit Mode / Search */}
                                     <div className="w-full">
                                       {!row.matchedProduct ? (
                                         <div className="relative">
                                           <input
                                             type="text"
-                                            value={row.ITEMDESC || ""}
+                                            value={row.ITEMDESC || ""} // Initialize search with invoice text if trying to map manually
                                             onChange={(e) => {
+                                              // We might want to separate search term from row.ITEMDESC if we want to preserve original
+                                              // But typically manual mapping replaces the "search key". 
+                                              // For now, let's keep it bound to ITEMDESC or a temp search field?
+                                              // The previous code bound it to ITEMDESC. Let's stick to that to avoid breaking logic, 
+                                              // although it modifies the invoice item text effectively.
                                               handleRowChange(i, "ITEMDESC", e.target.value);
                                               handleRowChange(i, "matchedProduct", null);
                                             }}
-                                            placeholder="Search product..."
-                                            className="w-full text-xs border rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-8"
+                                            placeholder="Search master product..."
+                                            className="w-full text-base border rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                           />
                                           {/* AUTOCOMPLETE DROPDOWN */}
                                           {row.ITEMDESC?.length >= 2 && (
@@ -873,7 +936,7 @@ export function MappingPage() {
                                                         return next;
                                                       });
                                                     }}
-                                                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 border-b border-neutral-100 last:border-b-0 transition-colors group/item"
+                                                    className="w-full text-left px-3 py-1.5 text-base hover:bg-blue-50 border-b border-neutral-100 last:border-b-0 transition-colors group/item"
                                                   >
                                                     <div className="font-medium text-neutral-900 group-hover/item:text-blue-700">
                                                       {formatProductDisplay(p)}
@@ -886,11 +949,7 @@ export function MappingPage() {
                                             </div>
                                           )}
                                         </div>
-                                      ) : (
-                                        <div className="text-xs font-medium text-neutral-500 leading-tight px-1 py-0.5">
-                                          {row.ITEMDESC || "(No Name)"}
-                                        </div>
-                                      )}
+                                      ) : null}
                                     </div>
 
                                     {/* Mapped Product Info */}
@@ -898,24 +957,24 @@ export function MappingPage() {
                                           <div className="w-full">
                                             <div 
                                               onClick={() => handleRowChange(i, "matchedProduct", null)}
-                                              className="flex items-center justify-between gap-1 px-2 py-1.5 bg-green-50 border border-green-200 rounded text-xs shadow-sm group/mapped cursor-pointer hover:bg-green-100 transition-colors"
+                                              className="flex items-center justify-between gap-1 px-2 py-1 bg-green-50 border border-green-200 rounded shadow-sm group/mapped cursor-pointer hover:bg-green-100 transition-colors"
                                               title="Click to change product"
                                             >
-                                              <div className="flex-1 min-w-0">
-                                                <div className="font-bold text-green-900 truncate text-xs">
+                                              <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                                                <div className="font-bold text-green-900 truncate text-base">
                                                   {formatProductDisplay(row.matchedProduct)}
                                                 </div>
-                                                <div className="text-green-700 text-[10px] opacity-80">
+                                                <div className="text-green-700 text-base opacity-80 whitespace-nowrap">
                                                   #{row.matchedProduct.productCode}
                                                 </div>
                                               </div>
-                                              <Edit2 className="w-3 h-3 text-green-600 opacity-0 group-hover/mapped:opacity-100 transition-opacity" />
+                                              <Edit2 className="w-4 h-4 text-green-600 opacity-0 group-hover/mapped:opacity-100 transition-opacity ml-1" />
                                             </div>
                                           </div>
                                         )}
   
                                     {/* SCHEME BADGES - Minimal Gift Box Style */}
-                                    {row.matchedProduct && row.availableSchemes?.length > 0 && (
+                                    {row.matchedProduct && row.availableSchemes?.length > 0 && !row.schemeApplied && (
   
                                        (() => {
                                            const schemeInfo = getSchemeInfo(row);
@@ -932,11 +991,12 @@ export function MappingPage() {
                                                     <div className="flex items-center justify-between px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-colors cursor-pointer"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            // Toggle apply
-                                                            const finalQty = active.minQty + active.totalFree;
+                                                            // Toggle apply - FIX: Set Qty to Billed (minQty) not Total (min+free)
+                                                            // Backend adds Free Qty automatically
+                                                            const finalQty = active.minQty;
                                                             handleRowChange(i, "ORDERQTY", finalQty);
                                                             handleRowChange(i, "schemeApplied", true);
-                                                            toast.success(`Applied: ${finalQty}`);
+                                                            toast.success(`Applied: ${finalQty} + ${active.totalFree} Free`);
                                                         }}
                                                     >
                                                         <div className="flex items-center gap-1.5">
@@ -951,9 +1011,9 @@ export function MappingPage() {
                                                 {next && (
                                                     <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors"
                                                          onClick={(e) => {
-                                                             e.stopPropagation();
-                                                             handleRowChange(i, "ORDERQTY", next.minQty);
-                                                             toast.info(`Updated to ${next.minQty}`);
+                                                              e.stopPropagation();
+                                                              handleRowChange(i, "ORDERQTY", next.minQty);
+                                                              toast.info(`Updated to ${next.minQty}`);
                                                          }}
                                                          title={`Add ${next.minQty - (Number(row.ORDERQTY)||0)} to get ${next.minQty} + ${next.freeQty} Free`}
                                                     >
@@ -977,27 +1037,27 @@ export function MappingPage() {
                                                     <div className="text-[10px] font-bold text-neutral-400 mb-1 px-1 uppercase tracking-wider">Schemes</div>
                                                     <div className="space-y-0.5 max-h-40 overflow-y-auto">
                                                         {all?.map((s: any, idx: number) => {
-                                                             const isActive = active?.minQty === s.minQty;
-                                                             const isNext = next?.minQty === s.minQty;
-                                                             return (
-                                                                 <button
-                                                                     key={idx}
-                                                                     onClick={(e) => {
-                                                                         e.stopPropagation(); 
-                                                                         handleRowChange(i, "ORDERQTY", s.minQty);
-                                                                     }}
-                                                                     className={`w-full text-left px-2 py-1 rounded-[4px] text-[10px] flex items-center justify-between transition-colors ${
-                                                                         isActive ? 'bg-amber-50 text-amber-900 font-semibold' : 
-                                                                         isNext ? 'bg-blue-50 text-blue-800' : 
-                                                                         'hover:bg-neutral-50 text-neutral-600'
-                                                                     }`}
-                                                                 >
-                                                                     <span>{s.schemeName || "Slab"} ({s.minQty}+{s.freeQty})</span>
-                                                                     {isActive && <Check className="w-3 h-3 text-amber-600" />}
-                                                                     {isNext && <span className="text-[9px] bg-blue-100 text-blue-700 px-1 rounded">Next</span>}
-                                                                 </button>
-                                                             );
-                                                        })}
+                                                              const isActive = active?.minQty === s.minQty;
+                                                              const isNext = next?.minQty === s.minQty;
+                                                              return (
+                                                                  <button
+                                                                      key={idx}
+                                                                      onClick={(e) => {
+                                                                          e.stopPropagation(); 
+                                                                          handleRowChange(i, "ORDERQTY", s.minQty);
+                                                                      }}
+                                                                      className={`w-full text-left px-2 py-1 rounded-[4px] text-[10px] flex items-center justify-between transition-colors ${
+                                                                          isActive ? 'bg-amber-50 text-amber-900 font-semibold' : 
+                                                                          isNext ? 'bg-blue-50 text-blue-800' : 
+                                                                          'hover:bg-neutral-50 text-neutral-600'
+                                                                      }`}
+                                                                  >
+                                                                      <span>{s.schemeName || "Slab"} ({s.minQty}+{s.freeQty})</span>
+                                                                      {isActive && <Check className="w-3 h-3 text-amber-600" />}
+                                                                      {isNext && <span className="text-[9px] bg-blue-100 text-blue-700 px-1 rounded">Next</span>}
+                                                                  </button>
+                                                              );
+                                                         })}
                                                     </div>
                                                </div>
                                            </div>
@@ -1009,28 +1069,52 @@ export function MappingPage() {
                             </td>
 
                             {/* QUANTITY COLUMN - INCREASED WIDTH */}
-                            <td className="px-3 py-2 text-center">
-                              <input
-                                type="number"
-                                className={`w-full text-center text-sm font-semibold px-2 py-2 border-2 rounded transition-all ${
-                                  hasError
-                                    ? "border-red-500 bg-red-50 text-red-700"
-                                    : (row["BOX PACK"] > 0 && Number(row.ORDERQTY) % Number(row["BOX PACK"]) === 0)
-                                    ? "border-green-300 bg-green-50 text-green-800"
-                                    : "border-neutral-200 bg-white"
-                                }`}
-                                value={row.ORDERQTY || ""}
-                                onChange={(e) => handleRowChange(i, "ORDERQTY", e.target.value)}
-                                placeholder="0"
-                              />
+                            <td className="px-3 py-1 text-center">
+                              {(() => {
+                                 const info = getSchemeInfo(row);
+                                 // Show "50 + 10" text ONLY if scheme is APPLIED and not currently editing
+                                 if (info?.active && row.schemeApplied && activeEditRow !== i) {
+                                     return (
+                                         <div 
+                                          onClick={() => setActiveEditRow(i)}
+                                          className="w-full text-center text-base font-bold text-green-700 bg-green-50 px-2 py-1 border-2 border-green-200 rounded cursor-text flex items-center justify-center gap-1 h-[34px]"
+                                          title="Click to edit quantity"
+                                        >
+                                           {row.ORDERQTY} <span className="text-xs text-green-500">+</span> {info.active.totalFree}
+                                        </div>
+                                     );
+                                 }
+
+                                 // Otherwise show Input
+                                 return (
+                                    <input
+                                      type="number"
+                                      autoFocus={activeEditRow === i}
+                                      onBlur={() => setActiveEditRow(null)}
+                                      onKeyDown={(e) => {
+                                          if(e.key === 'Enter') setActiveEditRow(null);
+                                      }}
+                                      className={`w-full text-center text-base font-semibold px-2 py-1 border-2 rounded transition-all h-[34px] ${
+                                        hasError
+                                          ? "border-red-500 bg-red-50 text-red-700"
+                                          : (row["BOX PACK"] > 0 && Number(row.ORDERQTY) % Number(row["BOX PACK"]) === 0)
+                                          ? "border-green-300 bg-green-50 text-green-800"
+                                          : "border-neutral-200 bg-white"
+                                      }`}
+                                      value={row.ORDERQTY || ""}
+                                      onChange={(e) => handleRowChange(i, "ORDERQTY", e.target.value)}
+                                      placeholder="0"
+                                    />
+                                 );
+                              })()}
                             </td>
 
                             {/* BOX PACK COLUMN - INCREASED WIDTH */}
-                            <td className="px-3 py-2 text-center">
+                            <td className="px-3 py-1 text-center">
                               <div className="relative">
                                 <input
                                   type="number"
-                                  className="w-full text-center text-sm px-2 py-2 border rounded bg-neutral-50"
+                                  className="w-full text-center text-base px-2 py-1 border rounded bg-neutral-50"
                                   value={row["BOX PACK"] || row.matchedProduct?.boxPack || ""}
                                   onChange={(e) => handleRowChange(i, "BOX PACK", e.target.value)}
                                 />
@@ -1060,26 +1144,26 @@ export function MappingPage() {
                             </td>
 
                             {/* PACK COLUMN - INCREASED WIDTH */}
-                            <td className="px-3 py-2 text-center">
+                            <td className="px-3 py-1 text-center">
                               <input
                                 type="text"
-                                className="w-full text-center text-sm font-medium px-2 py-2 border rounded bg-blue-50 text-blue-800"
+                                className="w-full text-center text-base font-medium px-2 py-1 border rounded bg-blue-50 text-blue-800"
                                 value={row.PACK || ""}
                                 onChange={(e) => handleRowChange(i, "PACK", e.target.value)}
                               />
                             </td>
 
                             {/* DIVISION COLUMN */}
-                            <td className="px-3 py-2 text-center">
-                              <div className="text-xs font-medium text-neutral-700">
+                            <td className="px-3 py-1 text-center">
+                              <div className="text-base font-medium text-neutral-700">
                                 {row.matchedProduct?.division || row.DVN || "-"}
                               </div>
                             </td>
 
                             {/* SHEET COLUMN */}
-                            <td className="px-3 py-2 text-center">
+                            <td className="px-3 py-1 text-center">
                               {sheet ? (
-                                <Badge className={`${sheet.color.badge} ${sheet.color.text} text-xs`}>
+                                <Badge className={`${sheet.color.badge} ${sheet.color.text} text-base`}>
                                   {sheet.name}
                                 </Badge>
                               ) : (
@@ -1093,21 +1177,21 @@ export function MappingPage() {
                             </td>
 
                             {/* STATUS COLUMN */}
-                            <td className="px-3 py-2 text-center">
+                            <td className="px-3 py-1 text-center">
                               {row.matchedProduct ? (
-                                <Badge className="bg-green-100 text-green-700 text-xs font-semibold">
+                                <Badge className="bg-green-100 text-green-700 text-base font-semibold">
                                   <Check className="w-3 h-3 mr-1" />
                                   OK
                                 </Badge>
                               ) : (
-                                <Badge variant="warning" className="text-xs">
+                                <Badge variant="warning" className="text-base">
                                   Map
                                 </Badge>
                               )}
                             </td>
 
                             {/* DELETE BUTTON */}
-                            <td className="px-3 py-2 text-center">
+                            <td className="px-3 py-1 text-center">
                               <button
                                 onClick={() => deleteRow(i)}
                                 className="text-neutral-400 hover:text-red-600 transition-colors p-1"
@@ -1137,11 +1221,21 @@ export function MappingPage() {
         </Card>
 
         {/* Actions */}
-        <div className="flex justify-center pt-6">
+        <div className="flex justify-center pt-6 gap-3">
+             <Button 
+                variant="secondary"
+                onClick={handleUniversalRoundOff}
+                className="bg-white hover:bg-neutral-50 border-blue-200 text-blue-700 hover:text-blue-800 shadow-md"
+                title="Round off all quantities to nearest box pack"
+             >
+                <RefreshCw className="w-5 h-5 mr-2" />
+                Round Off
+             </Button>
+
           <Button
             onClick={() => handleConvert()}
             isLoading={converting}
-            className="px-8 py-3 text-lg shadow-lg hover:shadow-xl transition-all"
+            className="px-8 py-3 text-base shadow-lg hover:shadow-xl transition-all"
           >
             <Zap className="w-5 h-5 mr-2" />
             Process Orders

@@ -70,51 +70,38 @@ export function ViewEditSchemeModal({
     }
   };
 
-  const handleEdit = (index: number, field: string, value: string) => {
-    const updatedData = [...data];
-    const numValue = Number(value);
-    
-    // Validate numeric fields
-    if (field === 'orderQty' || field === 'freeQty' || field === 'schemePercent') {
-      if (value !== '' && (isNaN(numValue) || numValue < 0)) {
-        return; // Don't update if invalid
-      }
-      
-      const finalValue = value === '' ? 0 : numValue;
-      updatedData[index] = {
-        ...updatedData[index],
-        [field]: finalValue
-      };
-      
-      // 🔥 PROPORTIONAL SCHEME SCALING
-      // When orderQty changes, automatically recalculate freeQty
-      // Example: 100+20 base → 200 order → 40 free (multiplier = 2)
-      if (field === 'orderQty' && schemeRatios[index]) {
-        const { baseOrderQty, baseFreeQty } = schemeRatios[index];
-        
-        if (baseOrderQty > 0 && baseFreeQty > 0) {
-          // Calculate multiplier (how many times base order fits)
-          const multiplier = Math.floor(finalValue / baseOrderQty);
-          const newFreeQty = multiplier * baseFreeQty;
-          
-          updatedData[index].freeQty = newFreeQty;
-          
-          // Also update scheme percent
-          if (finalValue > 0) {
-            updatedData[index].schemePercent = Number(((newFreeQty / finalValue) * 100).toFixed(2));
-          }
-        }
-      }
-    } else {
-      updatedData[index] = {
-        ...updatedData[index],
-        [field]: value
-      };
-    }
-    
-    setData(updatedData);
-    setHasChanges(true);
-  };
+const handleEdit = (index: number, field: string, value: string) => {
+  const updatedData = [...data];
+  const numValue = Number(value);
+
+  if (isNaN(numValue) || numValue < 0) return;
+
+  const scheme = updatedData[index];
+  const baseRatio = schemeRatios[index];
+
+  if (!baseRatio) return;
+
+  const { baseOrderQty, baseFreeQty } = baseRatio;
+
+  // User edits BASE quantity only
+  if (field === "baseOrderQty") {
+    const multiplier = Math.floor(numValue / baseOrderQty);
+    const freeQty = multiplier * baseFreeQty;
+
+    updatedData[index] = {
+      ...scheme,
+      baseOrderQty: numValue,
+      freeQty,
+      orderQty: numValue + freeQty, // FINAL QTY
+      schemePercent: numValue > 0
+        ? Number(((freeQty / numValue) * 100).toFixed(2))
+        : 0
+    };
+  }
+
+  setData(updatedData);
+  setHasChanges(true);
+};
 
   const handleSave = async () => {
     setSaving(true);
@@ -264,8 +251,8 @@ export function ViewEditSchemeModal({
                         <input
                           type="number"
                           min="0"
-                          value={orderQty}
-                          onChange={(e) => handleEdit(index, 'orderQty', e.target.value)}
+                          value={scheme.baseOrderQty}
+                          onChange={(e) => handleEdit(index, 'baseOrderQty', e.target.value)}
                           className="w-20 px-2 py-1 text-center border border-neutral-200 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                         />
                       </td>
