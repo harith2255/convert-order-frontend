@@ -6,7 +6,7 @@ import { Button } from "../Button";
 import { toast } from "sonner";
 
 // 🔥 Clean product name - remove form words and pack patterns
-const FORM_WORDS = /\b(TABLETS?|TABS?|TAB|CAPSULES?|CAPS?|CAP|SUSPENSION|ORAL|SYRUP|SYP|DROPS?|CREAM|GEL|SPRAY|OINTMENT|LOTION|POWDER)\b/gi;
+const FORM_WORDS = /\b(TABLETS?|TABS?|TAB|CAPSULES?|CAPS?|CAP|ORAL|OINTMENT|LOTION|POWDER)\b/gi;
 const PACK_PATTERNS = [
   /\(\s*\d+\s*['`"]?\s*S\s*\)/gi,     // (30'S)
   /\b\d+\s*['`"]?\s*S\b/gi,           // 30'S
