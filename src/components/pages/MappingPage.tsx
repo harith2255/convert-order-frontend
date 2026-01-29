@@ -65,7 +65,8 @@ const FrontendSchemeEngine = {
                     freeQty: multiplier * baseFree,
                     isVirtual: true,
                     schemeName: `Auto-Pattern (x${multiplier})`,
-                    schemeId: base.schemeId || 'virtual'
+                    schemeId: base.schemeId || 'virtual',
+                    schemePercent: base.schemePercent, // ✅ Propagate Scheme %
                 });
             }
             multiplier++;
