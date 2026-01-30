@@ -63,6 +63,7 @@ export const masterDataApi = {
       link.href = url;
       link.download = `master-data-${Date.now()}.xlsx`;
       document.body.appendChild(link);
+      link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (err) {

@@ -57,14 +57,14 @@ export function MasterDataPage() {
       </div>
 
       {/* INFO */}
-      <Card>
+      {/* <Card>
         <div className="flex gap-3">
           <Database className="w-5 h-5 text-primary-600" />
           <p className="text-sm">
             Used for validation and aggregation. Only ORDER QTY is updated during uploads.
           </p>
         </div>
-      </Card>
+      </Card> */}
 
       <Card>
         <div className="flex justify-between items-center mb-4">
