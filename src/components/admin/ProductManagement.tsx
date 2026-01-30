@@ -284,7 +284,6 @@ export function ProductManagement() {
                 setFormData({ ...formData, productCode: e.target.value })
               }
               placeholder="Enter product code"
-              disabled={!!editingProduct}
             />
           </div>
 
