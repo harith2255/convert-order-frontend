@@ -21,7 +21,11 @@ interface Product {
 }
 
 
-export function ProductManagement() {
+interface ProductManagementProps {
+  onDataChange?: () => void;
+}
+
+export function ProductManagement({ onDataChange }: ProductManagementProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -119,6 +123,7 @@ export function ProductManagement() {
 
       setIsModalOpen(false);
       loadProducts();
+      onDataChange?.();
     } catch (err: any) {
       toast.error(err.response?.data?.error || "Operation failed");
     }

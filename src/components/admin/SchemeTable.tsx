@@ -22,7 +22,11 @@ interface Scheme {
   isActive?: boolean;
 }
 
-export function SchemeTable() {
+interface SchemeTableProps {
+  refreshTrigger?: number;
+}
+
+export function SchemeTable({ refreshTrigger }: SchemeTableProps) {
   const [schemes, setSchemes] = useState<Scheme[]>([]);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -69,7 +73,7 @@ export function SchemeTable() {
 
   useEffect(() => {
     loadSchemes();
-  }, [page, search]);
+  }, [page, search, refreshTrigger]);
 
   const openCreate = () => {
     setEditingScheme(null);
@@ -335,7 +339,7 @@ export function SchemeTable() {
             <Input
               value={formData.productCode || ""}
               onChange={e => setFormData({ ...formData, productCode: e.target.value })}
-              disabled={viewMode || !!editingScheme}
+              disabled={viewMode}
               placeholder="SAP Product Code"
             />
           </div>

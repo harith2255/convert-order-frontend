@@ -10,6 +10,11 @@ import { ProductManagement } from "../admin/ProductManagement";
 import { SchemeTable } from "../admin/SchemeTable";
 
 export function MasterDataPage() {
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const handleDataChange = () => {
+    setRefreshKey(prev => prev + 1);
+  };
 
   const [dbFile, setDbFile] = useState<File | null>(null);
   const [loadingDb, setLoadingDb] = useState(false);
@@ -124,8 +129,9 @@ export function MasterDataPage() {
       </Card>
 
       <CustomerTable />
-      <ProductManagement />
-      <SchemeTable />
+      <ProductManagement onDataChange={handleDataChange} />
+      <SchemeTable refreshTrigger={refreshKey} />
+
 
     </div>
   );
