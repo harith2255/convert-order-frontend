@@ -604,8 +604,8 @@ export function MappingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-neutral-50 via-white to-blue-50/30 p-6">
-      <div className="max-w-[1600px] mx-auto space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-neutral-50 via-white to-blue-50/30 ">
+      <div className="max-w-full mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -697,7 +697,7 @@ export function MappingPage() {
             )}
 
             {selectedCustomer && (
-              <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center justify-between  bg-green-50 border border-green-200 rounded-lg">
                 <div>
                   <div className="font-medium text-green-900">{selectedCustomer.customerName}</div>
                   <div className="text-base text-green-700 mt-0.5">

@@ -13,6 +13,7 @@ import {
   FileText,
   CheckCircle,
   Upload,
+  Search, // ✅ Import Search
 } from "lucide-react";
 
 import { Card } from "../Card";
@@ -47,6 +48,7 @@ export function AdminDashboard({ }: AdminDashboardProps) {
   const [uploads, setUploads] = useState<any[]>([]);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState<any>(null);
+  const [searchTerm, setSearchTerm] = useState(""); // ✅ Search State
 
   // ✅ NEW: Modal State
   // Modal logic replaced by direct navigation to ResultPage
@@ -82,9 +84,9 @@ export function AdminDashboard({ }: AdminDashboardProps) {
     navigate(`/result/${upload.id}`);
   };
 
-  const loadUploads = async (pageNo = 1) => {
+  const loadUploads = async (pageNo = 1, search = searchTerm) => {
     const res = await api.get("/admin/master/audits", {
-      params: { page: pageNo, limit: 10 },
+      params: { page: pageNo, limit: 10, search }, // ✅ Pass search param
     });
 
     setUploads(
@@ -142,6 +144,14 @@ export function AdminDashboard({ }: AdminDashboardProps) {
     loadDashboard();
     loadUploads(1);
   }, []);
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadUploads(1, searchTerm);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   useEffect(() => {
     const interval = setInterval(loadDashboard, 30000);
@@ -231,7 +241,19 @@ export function AdminDashboard({ }: AdminDashboardProps) {
       </div>
 
       <Card>
-        <h3 className="text-lg font-semibold mb-4">Recent Uploads</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">Recent Uploads</h3>
+          <div className="relative w-96">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+            <input
+              type="text"
+              placeholder="Search uploads..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
 
         {uploads.length === 0 ? (
           <p className="text-sm text-neutral-500">No uploads yet</p>
