@@ -803,13 +803,13 @@ export function MappingPage() {
                   <th className="text-left px-3 py-3 text-base font-semibold uppercase tracking-wide w-[25%]">
                     Mapped Product
                   </th>
-                  <th className="text-center px-3 py-3 text-base font-semibold uppercase tracking-wide w-[8%]">
+                  <th className="text-center px-3 py-3 text-base font-semibold uppercase tracking-wide w-[8%] min-w-[90px]">
                     Qty
                   </th>
-                  <th className="text-center px-3 py-3 text-base font-semibold uppercase tracking-wide w-[8%]">
+                  <th className="text-center px-3 py-3 text-base font-semibold uppercase tracking-wide w-[8%] min-w-[90px]">
                     Box Pack
                   </th>
-                  <th className="text-center px-3 py-3 text-base font-semibold uppercase tracking-wide w-[8%]">
+                  <th className="text-center px-3 py-3 text-base font-semibold uppercase tracking-wide w-[8%] min-w-[80px]">
                     Pack
                   </th>
                   <th className="text-center px-3 py-3 text-base font-semibold uppercase tracking-wide w-[10%]">
