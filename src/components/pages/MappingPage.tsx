@@ -235,7 +235,7 @@ export function MappingPage() {
         pack = Number.isInteger(rawPack) ? rawPack : Number(rawPack.toFixed(2));
       }
 
-      return { ...r, PACK: pack, ORDERQTY: qty };
+      return { ...r, PACK: pack, ORDERQTY: qty, searchQuery: r.ITEMDESC || "" };
     });
 
     setRows(sanitizedRows);
@@ -300,7 +300,7 @@ export function MappingPage() {
   const addRow = () => {
     setRows(prev => [
       ...prev,
-      { ITEMDESC: "", ORDERQTY: "", manualProduct: null, isNew: true }
+      { ITEMDESC: "", searchQuery: "", ORDERQTY: "", manualProduct: null, isNew: true }
     ]);
     toast.success("New item added row created");
   };
@@ -534,7 +534,7 @@ export function MappingPage() {
           ...r,
           ORDERQTY: Number(r.ORDERQTY) || 0,
           matchedProduct: r.matchedProduct ? { ...r.matchedProduct } : null,
-          ITEMDESC: r.matchedProduct ? formatProductDisplay(r.matchedProduct) : r.ITEMDESC,
+          ITEMDESC: r.ITEMDESC,
           // 🔥 PASS STORED SCHEME VALUES TO BACKEND (Source of Truth)
           freeQty: schemeInfo?.active ? schemeInfo.active.totalFree : 0,
           schemePercent: schemeInfo?.active?.schemePercent || 0
@@ -883,10 +883,9 @@ export function MappingPage() {
                                         <div className="relative">
                                           <input
                                             type="text"
-                                            value={row.ITEMDESC || ""}
+                                            value={row.searchQuery ?? row.ITEMDESC ?? ""}
                                             onChange={(e) => {
-                                              handleRowChange(i, "ITEMDESC", e.target.value);
-                                              handleRowChange(i, "matchedProduct", null);
+                                              handleRowChange(i, "searchQuery", e.target.value);
                                             }}
                                             onFocus={() => setActiveSearchRow(i)}
                                             onClick={() => setActiveSearchRow(i)}
@@ -895,13 +894,14 @@ export function MappingPage() {
                                             className="w-full text-base border rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                           />
                                           {/* AUTOCOMPLETE DROPDOWN */}
-                                          {activeSearchRow === i && row.ITEMDESC?.length >= 2 && (
+                                          {activeSearchRow === i && (row.searchQuery?.length >= 2 || row.ITEMDESC?.length >= 2) && (
                                             <div className="absolute z-50 w-full mt-1 bg-white border border-neutral-300 rounded-lg shadow-xl max-h-64 overflow-y-auto">
                                               {allProducts
                                                 .filter(p => {
                                                   const normalizeTokens = (text = "") =>
                                                     text.toUpperCase().replace(/[^A-Z0-9]/g, " ").split(/\s+/).filter(Boolean);
-                                                  const invTokens = normalizeTokens(row.ITEMDESC);
+                                                  const queryText = row.searchQuery ?? row.ITEMDESC;
+                                                  const invTokens = normalizeTokens(queryText);
                                                   const prodTokens = normalizeTokens(p.productName);
                                                   const baseTokens = normalizeTokens(p.baseName || "");
 
@@ -937,7 +937,8 @@ export function MappingPage() {
                                                 .sort((a, b) => {
                                                     // Sort by relevance (exact first word match gets priority)
                                                     const normalizeTokens = (text = "") => text.toUpperCase().replace(/[^A-Z0-9]/g, " ").split(/\s+/).filter(Boolean);
-                                                    const invTokens = normalizeTokens(row.ITEMDESC);
+                                                    const queryText = row.searchQuery ?? row.ITEMDESC;
+                                                    const invTokens = normalizeTokens(queryText);
                                                     const firstToken = invTokens.find(t => isNaN(Number(t)) && t.length >= 3) || "_____"; // Safe fallback that won't match
 
                                                     const aHas = normalizeTokens(a.productName).includes(firstToken) ? 1 : 0;
@@ -953,14 +954,11 @@ export function MappingPage() {
                                                       setRows(prev => {
                                                         const next = [...prev];
                                                         
-                                                        // 🔥 UX IMPROVEMENT: Check if this is a manually added row (no extracted text)
-                                                        const isManualRow = !next[i]._rawText;
-                                                        
-                                                        if (isManualRow) {
-                                                            // Auto-fill Extracted Name so column 1 isn't empty
-                                                            next[i]._rawText = p.productName; 
+                                                        // 🔥 UX IMPROVEMENT: Only auto-fill Item Desc if it's empty (Manual Row)
+                                                        // This prevents overwriting the extracted Invoice Name (e.g. "PLAGERINE 75")
+                                                        if (!next[i].ITEMDESC || next[i].ITEMDESC.trim() === "") {
                                                             next[i].ITEMDESC = p.productName;
-                                                            toast.success(`Added & Mapped: ${p.productName}`);
+                                                            // toast.success(`Added & Mapped: ${p.productName}`);
                                                         }
 
                                                         next[i] = {
@@ -1015,7 +1013,10 @@ export function MappingPage() {
                                     {row.matchedProduct && (
                                           <div className="w-full">
                                             <div 
-                                              onClick={() => handleRowChange(i, "matchedProduct", null)}
+                                              onClick={() => {
+                                                  handleRowChange(i, "matchedProduct", null);
+                                                  handleRowChange(i, "searchQuery", row.ITEMDESC);
+                                              }}
                                               className="flex items-center justify-between gap-1 px-2 py-1 bg-green-50 border border-green-200 rounded shadow-sm group/mapped cursor-pointer hover:bg-green-100 transition-colors"
                                               title="Click to change product"
                                             >
