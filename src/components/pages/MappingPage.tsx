@@ -961,13 +961,26 @@ export function MappingPage() {
                                                             // toast.success(`Added & Mapped: ${p.productName}`);
                                                         }
 
+                                                        // 🔥 UX IMPROVEMENT: Auto-calculate PACK when mapping
+                                                        const boxPack = Number(p.boxPack) || 0;
+                                                        const currentQty = Number(next[i].ORDERQTY) || 0;
+                                                        let newPack = next[i].PACK; // Keep existing if calculation fails
+
+                                                        if (boxPack > 0 && currentQty > 0) {
+                                                            const rawPack = currentQty / boxPack;
+                                                            // If integer, keep as is. If float, verify precision
+                                                            newPack = Number.isInteger(rawPack) ? rawPack : Number(rawPack.toFixed(2));
+                                                        }
+
                                                         next[i] = {
                                                           ...next[i],
                                                           matchedProduct: p,
                                                           SAPCODE: p.productCode,
                                                           DVN: p.division,
                                                           mappingSource: "MANUAL",
-                                                          availableSchemes: []
+                                                          availableSchemes: [],
+                                                          "BOX PACK": boxPack > 0 ? boxPack : next[i]["BOX PACK"], // Auto-fill Box Pack
+                                                          PACK: newPack // Auto-fill Pack
                                                         };
 
                                                         if (selectedCustomer?.customerCode) {
