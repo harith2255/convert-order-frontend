@@ -49,7 +49,7 @@ export function MasterDataPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6 max-w-7xl">
       {/* HEADER */}
       <div>
         <h1 className="text-3xl font-bold">Master Data Management</h1>
