@@ -156,10 +156,19 @@ export function UserAccessPage() {
     {
       key: "lastLogin",
       label: "Last Login",
-      render: (v: string) => (v ? new Date(v).toLocaleString() : "—"),
+      render: (v: string, row: any) => {
+        const val = v || row.last_login || row.lastActive || row.updatedAt;
+        return val ? new Date(val).toLocaleString() : "—";
+      },
     },
 
-    { key: "conversions", label: "Conversions" },
+    {
+      key: "conversions",
+      label: "Conversions",
+      render: (v: any, row: any) => {
+        return v ?? row.conversionCount ?? row.conversionsCount ?? row.uploadsCount ?? 0;
+      },
+    },
 
     {
       key: "actions",

@@ -22,6 +22,7 @@ import {
   generateDivisionReport,
   downloadFileFromUrl,
 } from "../../services/orderApi";
+import { useAuth } from "../../context/AuthContext";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { SchemeSummaryCard } from "../../components/SchemeSummary.tsx";
@@ -38,6 +39,7 @@ import { PreviewTable } from "../../components/result-page/PreviewTable";
 export function ResultPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [downloadingType, setDownloadingType] = useState<string | null>(null);
@@ -414,7 +416,13 @@ export function ResultPage() {
           <div className="flex gap-3 w-full sm:w-auto">
             <Button
               variant="secondary"
-              onClick={() => navigate("/history")}
+              onClick={() => {
+                if (user?.role === "admin") {
+                  navigate("/admin");
+                } else {
+                  navigate("/history");
+                }
+              }}
               className="flex-1 sm:flex-auto"
             >
               View History
