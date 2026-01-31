@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { UserPlus } from "lucide-react";
+import { UserPlus, Trash2 } from "lucide-react";
 import { Card } from "../Card";
 import { Button } from "../Button";
 import { Input } from "../Input";
@@ -17,6 +17,7 @@ export function UserAccessPage() {
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [confirmModal, setConfirmModal] = useState<any>(null);
+  const [deleteModal, setDeleteModal] = useState<any>(null);
 
   const [newUser, setNewUser] = useState({
     name: "",
@@ -91,6 +92,20 @@ export function UserAccessPage() {
       toast.error("Failed to update status");
     } finally {
       setConfirmModal(null);
+    }
+  };
+
+  /* ---------------- DELETE USER ---------------- */
+  const handleDeleteUser = async () => {
+    if (!deleteModal) return;
+    try {
+      await adminUsersApi.deleteUser(deleteModal.id);
+      setUsers(prev => prev.filter(u => u.id !== deleteModal.id));
+      toast.success("User deleted successfully");
+    } catch {
+      toast.error("Failed to delete user");
+    } finally {
+      setDeleteModal(null);
     }
   };
 
@@ -174,11 +189,21 @@ export function UserAccessPage() {
       key: "actions",
       label: "Actions",
       render: (_: any, row: any) => (
-        <input
-          type="checkbox"
-          checked={row.status === "Active"}
-          onChange={() => setConfirmModal(row)}
-        />
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={row.status === "Active"}
+            onChange={() => setConfirmModal(row)}
+            className="toggle-checkbox" // Assuming you have some styles for this or using a custom component
+          />
+          <Button
+            variant="ghost" // or "destructive" if available/preferred for icons
+            className="p-1 hover:bg-red-50 text-red-500"
+            onClick={() => setDeleteModal(row)}
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
       ),
     },
   ];
@@ -282,6 +307,36 @@ export function UserAccessPage() {
       >
         Are you sure you want to change status for{" "}
         <b>{confirmModal?.name}</b>?
+      </CustomModal>
+
+      {/* DELETE MODAL */}
+      <CustomModal
+        isOpen={!!deleteModal}
+        onClose={() => setDeleteModal(null)}
+        title="Delete User"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setDeleteModal(null)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="danger" // Changed from destructive to danger
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleDeleteUser}
+            >
+              Delete
+            </Button>
+          </>
+        }
+      >
+        Are you sure you want to permanently delete user{" "}
+        <b>{deleteModal?.name}</b>?
+        <p className="text-sm text-gray-500 mt-2">
+          This action cannot be undone.
+        </p>
       </CustomModal>
     </div>
   );

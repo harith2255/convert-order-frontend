@@ -18,4 +18,7 @@ export const adminUsersApi = {
 
   toggleStatus: (id: string) =>
     api.put(`/admin/users/${id}/status`),
+
+  deleteUser: (id: string) =>
+    api.delete(`/admin/users/${id}`),
 };
