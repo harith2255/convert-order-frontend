@@ -860,7 +860,7 @@ export function MappingPage() {
                             `}
                           >
                               {/* 1: INVOICE ITEM */}
-                                <td className="px-3 py-2 align-middle text-sm text-neutral-700 font-medium break-words">
+                                <td className="px-3 py-2 align-middle text-base text-neutral-700 font-medium break-words">
                                     {row._rawText || row.ITEMDESC || "(No Name)"}
                                     {filesData.length > 1 && (
                                         <div className="text-[10px] text-neutral-400 font-normal mt-0.5">
@@ -886,7 +886,7 @@ export function MappingPage() {
                                                 onFocus={() => setActiveSearchRow(i)}
                                                 onClick={() => setActiveSearchRow(i)}
                                                 placeholder="Search..."
-                                                className="w-full text-sm border rounded pl-8 pr-2 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                className="w-full text-base border rounded pl-8 pr-2 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                               />
                                           </div>
                                           
