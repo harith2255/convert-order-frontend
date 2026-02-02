@@ -1020,10 +1020,10 @@ export function MappingPage() {
                                             className="flex items-center justify-between px-2 py-1.5 bg-green-50 border border-green-200 rounded cursor-pointer hover:bg-green-100 group"
                                           >
                                             <div className="overflow-hidden">
-                                                <div className="font-medium text-green-900 truncate text-sm">
+                                                <div className="font-semibold text-black truncate text-base">
                                                   {formatProductDisplay(row.matchedProduct)}
                                                 </div>
-                                                <div className="text-[10px] text-green-700">
+                                                <div className="text-[10px] text-black-700">
                                                   #{row.matchedProduct.productCode}
                                                 </div>
                                             </div>
@@ -1041,7 +1041,7 @@ export function MappingPage() {
                                            return (
                                             <div className="mt-1 flex flex-wrap gap-2">
                                                 {active && (
-                                                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-green-50 text-green-700 border border-green-200 cursor-pointer"
+                                                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[12px] bg-green-50 text-green-700 border border-green-200 cursor-pointer"
                                                         onClick={() => {
                                                             // Only bump quantity if less than min, otherwise just apply
                                                             const current = Number(row.ORDERQTY) || 0;
@@ -1057,7 +1057,7 @@ export function MappingPage() {
                                                 )}
                                                 
                                                 {next && (
-                                                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-blue-50 text-blue-700 border border-blue-200 cursor-pointer"
+                                                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[12px] bg-blue-50 text-blue-700 border border-blue-200 cursor-pointer"
                                                         onClick={() => {
                                                             handleRowChange(i, "ORDERQTY", next.minQty);
                                                             handleRowChange(i, "schemeApplied", true);
