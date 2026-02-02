@@ -33,11 +33,14 @@ export function UploadPage() {
     setIsDragging(false);
   };
 async function uploadAndParse(
-  file: File,
+  files: File[],
   onProgress: (p: number) => void
 ) {
   const formData = new FormData();
-  formData.append("file", file);
+  // Append all files with key "files" (matching backend)
+  files.forEach(file => {
+    formData.append("files", file);
+  });
 
   onProgress(50);
 
@@ -47,24 +50,26 @@ async function uploadAndParse(
 
   onProgress(80);
 
-const result = res.data;
+  const result = res.data;
 
-if (!result) {
-  throw new Error("Empty server response");
-}
+  if (!result) {
+    throw new Error("Empty server response");
+  }
 
-if (result.error) {
-  throw new Error(result.error);
-}
-
-if (!Array.isArray(result.dataRows) || result.dataRows.length === 0) {
-  throw new Error("No rows could be extracted from the file");
-}
-
+  // Backend v2 return { success: true, results: [...] }
+  if (result.results && Array.isArray(result.results)) {
+     // Check if ALL failed?
+     const allFailed = result.results.every((r: any) => r.status === 'FAILED' || r.status === 'ERROR');
+     if (allFailed) {
+        throw new Error("All uploaded files failed extraction.");
+     }
+  } else if (result.error) {
+     throw new Error(result.error);
+  }
 
   onProgress(100);
 
-  return res.data;
+  return result;
 }
 
 const handleDrop = (e: React.DragEvent) => {
@@ -118,8 +123,8 @@ const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
   };
 
 const handleContinue = async () => {
-  if (uploadedFiles.length !== 1) {
-    alert("Please upload only one file at a time.");
+  if (uploadedFiles.length === 0) {
+    alert("Please upload at least one file.");
     return;
   }
 
@@ -127,28 +132,27 @@ const handleContinue = async () => {
     setIsUploading(true);
     setUploadProgress(20);
 
-    const file = uploadedFiles[0];
-
     setUploadProgress(40); // upload started
 
-    const parsedResult = await uploadAndParse(file, setUploadProgress);
+    const response = await uploadAndParse(uploadedFiles, setUploadProgress);
 
+    // If response.results exists, it's the new format
+    // Pass 'results' array to Mapping Page
     navigate("/mapping", {
       state: {
-        parsedResult,   // ✅ VERY IMPORTANT
-        fileName: file.name,
+        results: response.results, 
+        isMultiFile: true
       },
     });
   } catch (err: any) {
-  const message =
-    err?.response?.data?.message ||
-    err?.message ||
-    "Failed to upload and parse file.";
+    const message =
+      err?.response?.data?.message ||
+      err?.message ||
+      "Failed to upload and parse file.";
 
-  alert(message);
-  console.error("Upload/parse failed:", err);
-}
- finally {
+    alert(message);
+    console.error("Upload/parse failed:", err);
+  } finally {
     setIsUploading(false);
   }
 };

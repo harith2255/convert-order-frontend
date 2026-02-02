@@ -35,9 +35,11 @@ export const ConversionSummary: React.FC<ConversionSummaryProps> = ({
               <span>
                 Processed: <strong>{data.successRows + errorCount}</strong> rows
               </span>
-              <span className="flex items-center gap-1">
-                <RefreshCw className="w-3 h-3" /> {data.processingTime}
-              </span>
+              {data.processingTime && data.processingTime !== "-" && (
+                <span className="flex items-center gap-1">
+                  <RefreshCw className="w-3 h-3" /> {data.processingTime}
+                </span>
+              )}
             </div>
           </div>
         </div>
