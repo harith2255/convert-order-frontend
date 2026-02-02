@@ -1041,7 +1041,7 @@ export function MappingPage() {
                                            return (
                                             <div className="mt-1 flex flex-wrap gap-2">
                                                 {active && (
-                                                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[12px] bg-green-50 text-green-700 border border-green-200 cursor-pointer"
+                                                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[14px] bg-green-50 text-green-700 border border-green-200 cursor-pointer"
                                                         onClick={() => {
                                                             // Only bump quantity if less than min, otherwise just apply
                                                             const current = Number(row.ORDERQTY) || 0;
@@ -1051,19 +1051,19 @@ export function MappingPage() {
                                                             handleRowChange(i, "schemeApplied", true);
                                                         }}
                                                     >
-                                                        <Gift className="w-3 h-3" />
+                                                        <Gift className="w-4 h-4" />
                                                         <span>{active.minQty}+{active.totalFree} Free</span>
                                                     </div>
                                                 )}
                                                 
                                                 {next && (
-                                                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[12px] bg-blue-50 text-blue-700 border border-blue-200 cursor-pointer"
+                                                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[14px] bg-blue-50 text-blue-700 border border-blue-200 cursor-pointer"
                                                         onClick={() => {
                                                             handleRowChange(i, "ORDERQTY", next.minQty);
                                                             handleRowChange(i, "schemeApplied", true);
                                                         }}
                                                     >
-                                                        <Zap className="w-3 h-3 text-blue-600 fill-blue-600" />
+                                                        <Zap className="w-4 h-4 text-blue-600 fill-blue-600" />
                                                         <span>
                                                             Add {next.minQty - (Number(row.ORDERQTY) || 0)} → {next.freeQty} Free
                                                         </span>
