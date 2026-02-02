@@ -1090,7 +1090,7 @@ export function MappingPage() {
                                      return (
                                         <input
                                           type="number"
-                                          className={`w-16 text-center text-sm font-semibold px-1 py-1 border rounded ${hasError ? "border-red-500 bg-red-50" : "border-neutral-300"}`}
+                                          className={`w-20 text-center text-base font-semibold px-1 py-1 border rounded ${hasError ? "border-red-500 bg-red-50" : "border-neutral-300"}`}
                                           value={row.ORDERQTY || ""}
                                           onChange={(e) => handleRowChange(i, "ORDERQTY", e.target.value)}
                                         />
@@ -1120,7 +1120,7 @@ export function MappingPage() {
                                             className="text-neutral-400 hover:text-blue-600"
                                             title="Round Up"
                                           >
-                                              <RefreshCw className="w-3 h-3" />
+                                              <RefreshCw className="w-5 h-5 ml-4" />
                                           </button>
                                       )}
                                     </div>
