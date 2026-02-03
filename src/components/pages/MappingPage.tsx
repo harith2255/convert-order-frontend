@@ -706,8 +706,8 @@ export function MappingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20">
-      <div className="max-w-[1600px] mx-auto  py-6 space-y-6">
+    <div className="min-h-screen bg-slate-50 pb-20 ">
+      <div className="w-full py-6 space-y-6">
 
         {/* HEADER */}
         <div className="flex items-center justify-between">

@@ -61,7 +61,7 @@ export default function App() {
       {/* Main content area - scrollable */}
       <div className="lg:ml-64 h-screen flex flex-col bg-neutral-50 overflow-hidden">
         {/* Mobile Header */}
-        <div className="lg:hidden sticky top-0 z-20 bg-white border-b border-neutral-200 px-4 py-3">
+        <div className="lg:hidden sticky top-0 z-20 bg-white border-b border-neutral-200  py-3">
           <div className="flex items-center justify-between">
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -77,7 +77,7 @@ export default function App() {
         </div>
 
         {/* Page content - flex-1 with proper overflow */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <div className="flex-1 overflow-y-auto p-4">
           <Routes>
             {/* USER ROUTES */}
             <Route
