@@ -829,7 +829,7 @@ export function MappingPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-neutral-50 border-b border-neutral-200 text-neutral-500 text-xs uppercase tracking-wider">
+                <tr className="bg-neutral-50 border-b border-neutral-200 text-neutral-500 text-base uppercase tracking-wider">
                   <th className="px-3 py-3 w-[15%]">Invoice Item</th>
                   <th className="px-3 py-3 w-[25%]">Mapped Product</th>
                   <th className="px-3 py-3 w-[10%] text-center">Qty</th>
