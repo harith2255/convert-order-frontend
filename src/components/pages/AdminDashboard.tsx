@@ -14,6 +14,7 @@ import {
   CheckCircle,
   Upload,
   Search, // ✅ Import Search
+  Trash2, // ✅ Import Trash2
 } from "lucide-react";
 
 import { Card } from "../Card";
@@ -21,6 +22,7 @@ import { Button } from "../Button";
 import { StatCard } from "../StatCard";
 import { Table } from "../Table";
 import { Badge } from "../Badge";
+import { Modal } from "../Modal"; // ✅ Import Modal
 import api from "../../services/api";
 
 interface AdminDashboardProps {}
@@ -44,6 +46,11 @@ export function AdminDashboard({ }: AdminDashboardProps) {
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
   const [exporting, setExporting] = useState(false);
+  
+  // ✅ Date Range Delete State
+  const [dateRange, setDateRange] = useState({ start: "", end: "" });
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false); // ✅ Modal State
 
   const [uploads, setUploads] = useState<any[]>([]);
   const [page, setPage] = useState(1);
@@ -137,6 +144,41 @@ export function AdminDashboard({ }: AdminDashboardProps) {
       toast.error("Failed to export master data");
     } finally {
       setExporting(false);
+    }
+  };
+
+  // ✅ Handle Date Range Delete Trigger
+  const handleDeleteTrigger = () => {
+    if (!dateRange.start || !dateRange.end) {
+      toast.error("Please select both start and end dates");
+      return;
+    }
+    setShowDeleteModal(true); // Open Modal
+  };
+
+  // ✅ Confirm Delete Logic
+  const confirmDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const res = await api.delete("/admin/dashboard/uploads/range", {
+        data: {
+          startDate: dateRange.start,
+          endDate: dateRange.end
+        }
+      });
+
+      if (res.data.success) {
+        toast.success(res.data.message);
+        loadUploads(1); // Refresh list
+        loadDashboard(); // Refresh stats
+        setDateRange({ start: "", end: "" }); // Reset
+        setShowDeleteModal(false); // Close Modal
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to delete uploads");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -241,9 +283,38 @@ export function AdminDashboard({ }: AdminDashboardProps) {
       </div>
 
       <Card>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">Recent Uploads</h3>
-          <div className="relative w-96">
+        <div className="flex flex-col md:flex-row justify-between gap-4 mb-4">
+          <div className="flex items-left justify-between gap-4">
+             <h3 className="text-lg font-semibold">Recent Uploads</h3>
+             
+             {/* ✅ Date Range Delete Controls */}
+             <div className="flex items-center gap-2 bg-red-50 p-2 rounded-lg border border-red-100">
+                <input 
+                  type="date" 
+                  className="px-2 py-1 text-xs border rounded bg-white"
+                  value={dateRange.start}
+                  onChange={e => setDateRange({...dateRange, start: e.target.value})}
+                />
+                <span className="text-xs text-neutral-500">to</span>
+                <input 
+                  type="date" 
+                  className="px-2 py-1 text-xs border rounded bg-white"
+                  value={dateRange.end}
+                  onChange={e => setDateRange({...dateRange, end: e.target.value})}
+                />
+                <Button 
+                  size="sm" 
+                  variant="danger" 
+                  onClick={handleDeleteTrigger} // ✅ Trigger Modal
+                  disabled={isDeleting}
+                  className="bg-red-500 hover:bg-red-600 text-white border-none h-8 px-3"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+             </div>
+          </div>
+
+          <div className="relative w-full md:w-96">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
             <input
               type="text"
@@ -289,6 +360,44 @@ export function AdminDashboard({ }: AdminDashboardProps) {
           </Button>
         </div>
       </Card>
+
+      {/* ✅ Delete Confirmation Modal */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        title="Confirm Deletion"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={confirmDelete} isLoading={isDeleting}>
+              Delete Permanently
+            </Button>
+          </>
+        }
+      >
+         <div className="space-y-4">
+            <div className="p-4 bg-red-50 text-red-700 rounded-lg flex items-start gap-3">
+               <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+               <div>
+                  <p className="font-semibold">Warning: Irreversible Action</p>
+                  <p className="text-sm mt-1">
+                     You are about to delete all uploads between <strong>{dateRange.start}</strong> and <strong>{dateRange.end}</strong>.
+                  </p>
+               </div>
+            </div>
+            <p className="text-neutral-600">
+               This will permanently remove:
+            </p>
+            <ul className="list-disc list-inside text-sm text-neutral-600 ml-2 space-y-1">
+               <li>Original uploaded files</li>
+               <li>Extracted validation data</li>
+               <li>Converted output files</li>
+               <li>Scheme calculations associated with these uploads</li>
+            </ul>
+         </div>
+      </Modal>
 
 
     </div>
