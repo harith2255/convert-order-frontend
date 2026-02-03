@@ -307,9 +307,9 @@ export function AdminDashboard({ }: AdminDashboardProps) {
                   variant="danger" 
                   onClick={handleDeleteTrigger} // ✅ Trigger Modal
                   disabled={isDeleting}
-                  className="bg-red-500 hover:bg-red-600 text-white border-none h-8 px-3"
+                  className="bg-red-500 hover:bg-red-600 text-white border-none h-8 px-33"
                 >
-                  <Trash2 className="w-3 h-3" />
+                  <Trash2 className="w-4 h-4" />
                 </Button>
              </div>
           </div>
