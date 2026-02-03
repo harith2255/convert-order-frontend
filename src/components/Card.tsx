@@ -9,9 +9,9 @@ interface CardProps {
 export function Card({ children, className = '', padding = 'md' }: CardProps) {
   const paddingStyles = {
     none: '',
-    sm: 'p-1',
-    md: 'p-2',
-    lg: 'p-4'
+    sm: 'p-2',
+    md: 'p-4',
+    lg: 'p-6'
   };
 
   return (

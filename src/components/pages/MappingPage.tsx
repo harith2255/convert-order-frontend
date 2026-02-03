@@ -826,7 +826,7 @@ export function MappingPage() {
 
         {/* 📊 MAPPING TABLE */}
         <Card className="mt-6 border border-neutral-200 overflow-hidden shadow-sm bg-white">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-xl">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-neutral-50 border-b border-neutral-200 text-neutral-500 text-base uppercase tracking-wider">
