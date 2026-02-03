@@ -77,7 +77,7 @@ export default function App() {
         </div>
 
         {/* Page content - flex-1 with proper overflow */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-3">
           <Routes>
             {/* USER ROUTES */}
             <Route
