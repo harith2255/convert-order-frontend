@@ -8,6 +8,7 @@
  */
 
 import React, { useEffect, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowRight,
   CheckCircle2,
@@ -214,6 +215,10 @@ export function MappingPage() {
       // Logic for closing row search
       if (activeSearchRow !== null) {
         const target = e.target as HTMLElement;
+        
+        // Check if click is inside the portal dropdown
+        if (target.closest('#portal-dropdown-container')) return;
+
         if (!target.closest(`#cell-search-${activeSearchRow}`)) {
           setActiveSearchRow(null);
         }
@@ -340,6 +345,28 @@ export function MappingPage() {
       errors.push("Invalid ORDERQTY");
     }
     setRowErrors(prev => ({ ...prev, [index]: errors }));
+  };
+
+  // DROPDOWN POSITION STATE
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number, left: number, width: number } | null>(null);
+
+  useEffect(() => {
+     // Clear dropdown position when active row changes or becomes null
+     if (activeSearchRow === null) {
+         setDropdownPosition(null);
+     }
+  }, [activeSearchRow]);
+
+  const updateDropdownPosition = (element: HTMLElement) => {
+      const rect = element.getBoundingClientRect();
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const scrollLeft = window.scrollX || document.documentElement.scrollLeft;
+
+      setDropdownPosition({
+          top: rect.bottom + scrollTop,
+          left: rect.left + scrollLeft,
+          width: rect.width
+      });
   };
 
   /* ---------------- ADD ROW ---------------- */
@@ -680,7 +707,7 @@ export function MappingPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
-      <div className="max-w-[1600px] mx-auto px-4 py-8 space-y-6">
+      <div className="max-w-[1600px] mx-auto  py-6 space-y-6">
 
         {/* HEADER */}
         <div className="flex items-center justify-between">
@@ -883,16 +910,30 @@ export function MappingPage() {
                                                 onChange={(e) => {
                                                   handleRowChange(i, "searchQuery", e.target.value);
                                                 }}
-                                                onFocus={() => setActiveSearchRow(i)}
-                                                onClick={() => setActiveSearchRow(i)}
                                                 placeholder="Search..."
                                                 className="w-full text-base border rounded pl-8 pr-2 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                onFocus={(e) => {
+                                                    setActiveSearchRow(i);
+                                                    updateDropdownPosition(e.currentTarget.parentElement?.parentElement as HTMLElement);
+                                                }}
+                                                onClick={(e) => {
+                                                    setActiveSearchRow(i);
+                                                    updateDropdownPosition(e.currentTarget.parentElement?.parentElement as HTMLElement);
+                                                }}
                                               />
                                           </div>
                                           
-                                          {/* DROPDOWN */}
-                                          {activeSearchRow === i && (row.searchQuery?.length >= 2 || row.ITEMDESC?.length >= 2) && (
-                                            <div className="absolute z-50 w-full mt-1 bg-white border border-neutral-300 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                                          {/* PORTAL DROPDOWN */}
+                                          {activeSearchRow === i && (row.searchQuery?.length >= 2 || row.ITEMDESC?.length >= 2) && dropdownPosition && createPortal(
+                                            <div 
+                                                id="portal-dropdown-container"
+                                                className="fixed z-[9999] bg-white border border-neutral-300 rounded-lg shadow-xl max-h-60 overflow-y-auto"
+                                                style={{
+                                                    top: dropdownPosition.top - window.scrollY, // Adjust for fixed position (viewport relative)
+                                                    left: dropdownPosition.left,
+                                                    width: dropdownPosition.width
+                                                }}
+                                            >
                                               {allProducts
                                                 .filter(p => {
                                                   // 🔍 SMART SEARCH:
@@ -1005,7 +1046,8 @@ export function MappingPage() {
                                                     <div className="text-xs text-neutral-500">{p.productCode}</div>
                                                   </button>
                                                 ))}
-                                            </div>
+                                            </div>,
+                                            document.body
                                           )}
                                         </div>
                                       ) : null}
