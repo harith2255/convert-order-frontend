@@ -235,7 +235,7 @@ export function ResultPage() {
   ];
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl space-y-6">
+    <div className="container mx-auto px-4 py-4 max-w-7xl space-y-6">
       <div className="flex items-center gap-3 mb-6">
         <Button variant="ghost" onClick={() => navigate("/upload")}>
           Back

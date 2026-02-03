@@ -107,7 +107,7 @@ export function UserDashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 mt-2">
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>

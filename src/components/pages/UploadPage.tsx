@@ -168,7 +168,7 @@ const handleContinue = async () => {
   };
 
   return (
-    <div className="space-y-6 max-w-7xl">
+    <div className="space-y-6 max-w-7xl mt-2">
       {/* Page Header */}
       <div>
         <h1 className="text-3xl font-bold text-neutral-900">Upload Order Files</h1>
