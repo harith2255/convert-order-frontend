@@ -34,8 +34,9 @@ export function ProductManagement({ onDataChange }: ProductManagementProps) {
   const [loading, setLoading] = useState(false);
   const [divisions, setDivisions] = useState<string[]>([]);
 
-  // Edit/Create state
+  // Edit/Create state 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState({
     productCode: "",
@@ -84,12 +85,27 @@ export function ProductManagement({ onDataChange }: ProductManagementProps) {
 
   const handleCreate = () => {
     setEditingProduct(null);
+    setViewMode(false);
     setFormData({ productCode: "", productName: "", division: "", boxPack: "" });
     setIsModalOpen(true);
   };
 
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
+    setViewMode(false);
+    setFormData({
+      productCode: product.productCode,
+      productName: product.productName,
+      division: product.division || "",
+      boxPack: product.boxPack ? product.boxPack.toString() : "",
+    });
+
+    setIsModalOpen(true);
+  };
+
+  const handleView = (product: Product) => {
+    setEditingProduct(product);
+    setViewMode(true);
     setFormData({
       productCode: product.productCode,
       productName: product.productName,
@@ -229,6 +245,13 @@ export function ProductManagement({ onDataChange }: ProductManagementProps) {
                   <td className="p-2">{product.boxPack || "-"}</td>
                   <td className="p-2 text-right">
                     <button
+                      onClick={() => handleView(product)}
+                      className="text-green-600 hover:text-green-800 mr-2"
+                      title="View Details"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button
                       onClick={() => handleEdit(product)}
                       className="text-blue-600 hover:text-blue-800 mr-2"
                     >
@@ -268,13 +291,13 @@ export function ProductManagement({ onDataChange }: ProductManagementProps) {
       <CustomModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingProduct ? "Edit Product" : "Add Product"}
+        title={viewMode ? "Product Details" : editingProduct ? "Edit Product" : "Add Product"}
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
-              Cancel
+              {viewMode ? "Close" : "Cancel"}
             </Button>
-            <Button onClick={handleSave}>Save</Button>
+            {!viewMode && <Button onClick={handleSave}>Save</Button>}
           </>
         }
       >
@@ -289,6 +312,7 @@ export function ProductManagement({ onDataChange }: ProductManagementProps) {
                 setFormData({ ...formData, productCode: e.target.value })
               }
               placeholder="Enter product code"
+              disabled={viewMode || !!editingProduct} 
             />
           </div>
 
@@ -302,6 +326,7 @@ export function ProductManagement({ onDataChange }: ProductManagementProps) {
                 setFormData({ ...formData, productName: e.target.value })
               }
               placeholder="Enter product name"
+              disabled={viewMode}
             />
           </div>
 
@@ -314,6 +339,7 @@ export function ProductManagement({ onDataChange }: ProductManagementProps) {
                 setFormData({ ...formData, division: val })
               }
               placeholder="Enter or select division"
+              disabled={viewMode}
             />
           </div>
 
@@ -328,6 +354,7 @@ export function ProductManagement({ onDataChange }: ProductManagementProps) {
                 setFormData({ ...formData, boxPack: e.target.value })
               }
               placeholder="Enter box pack (e.g. 10)"
+              disabled={viewMode}
             />
           </div>
         </div>

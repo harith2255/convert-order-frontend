@@ -8,6 +8,7 @@ interface AutocompleteProps {
   placeholder?: string;
   label?: string;
   className?: string;
+  disabled?: boolean;
 }
 
 export function Autocomplete({
@@ -17,6 +18,7 @@ export function Autocomplete({
   placeholder = "Select or type...",
   label,
   className = "",
+  disabled = false,
 }: AutocompleteProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [filter, setFilter] = useState("");
@@ -55,14 +57,17 @@ export function Autocomplete({
       <div className="relative">
         <input
           type="text"
-          className="w-full px-3 py-2 border border-neutral-300 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className={`w-full px-3 py-2 border border-neutral-300 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
+            disabled ? "bg-neutral-100 text-neutral-500 cursor-not-allowed" : ""
+          }`}
           value={value}
           onChange={(e) => {
             onChange(e.target.value);
             setIsOpen(true);
           }}
-          onFocus={() => setIsOpen(true)}
+          onFocus={() => !disabled && setIsOpen(true)}
           placeholder={placeholder}
+          disabled={disabled}
         />
         
         {/* Dropdown Toggle Icon (Visual only) */}
