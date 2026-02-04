@@ -119,8 +119,21 @@ export function HistoryPage() {
     try {
       const loadingKey = type ? `${uploadId}-${type}` : uploadId;
       setDownloading(loadingKey);
-      await downloadOrderFile(uploadId, fileName, type as any);
-      toast.success("File downloaded successfully");
+      
+      // Add prefix to file name like ResultPage does
+      const prefix = type === "sheets" ? "Sheet Orders" : type === "main" ? "Main Order" : "";
+      const name = prefix ? `${prefix} - ${fileName}` : fileName;
+      
+      await downloadOrderFile(uploadId, name, type as any);
+      toast.success(
+        `${
+          type === "sheets"
+            ? "Sheet Orders"
+            : type === "main"
+            ? "Main Order"
+            : "File"
+        } downloaded successfully`
+      );
     } catch (err: any) {
       console.error("Download error:", err);
       toast.error("Failed to download file");
