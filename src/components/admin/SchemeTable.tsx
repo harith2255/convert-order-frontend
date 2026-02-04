@@ -309,7 +309,6 @@ export function SchemeTable({ refreshTrigger }: SchemeTableProps) {
           <div className="flex gap-2">
             <Button
               size="sm"
-              variant="secondary"
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1 || paginating}
             >
@@ -317,7 +316,6 @@ export function SchemeTable({ refreshTrigger }: SchemeTableProps) {
             </Button>
             <Button
               size="sm"
-              variant="secondary"
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={page === totalPages || paginating}
             >
