@@ -381,7 +381,7 @@ export function AdminDashboard({ }: AdminDashboardProps) {
         <div className="flex justify-between items-center mt-4">
           <Button
             size="sm"
-            variant="secondary"
+            
             disabled={!pagination?.hasPrev || paginating}
             onClick={() => loadUploads(page - 1)}
           >
@@ -394,7 +394,7 @@ export function AdminDashboard({ }: AdminDashboardProps) {
 
           <Button
             size="sm"
-            variant="secondary"
+        
             disabled={!pagination?.hasNext || paginating}
             onClick={() => loadUploads(page + 1)}
           >
