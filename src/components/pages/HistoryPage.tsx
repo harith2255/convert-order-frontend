@@ -11,9 +11,6 @@ import { CustomModal } from '../Modal';
 import api from '../../services/api';
 import { toast } from 'sonner';
 import { downloadOrderFile } from '../../services/orderApi';
-import { FileViewerModal } from '../modals/FileViewerModal';
-import { ViewEditConvertedModal } from '../modals/ViewEditConvertedModal';
-import { ViewEditSchemeModal } from '../modals/ViewEditSchemeModal';
 
 export function HistoryPage() {
   const navigate = useNavigate();
@@ -25,9 +22,6 @@ export function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [paginating, setPaginating] = useState(false); // Separate state for pagination loading
   const [downloading, setDownloading] = useState<string | null>(null);
-  const [viewingFile, setViewingFile] = useState<{id: string, fileName?: string} | null>(null);
-  const [editingConverted, setEditingConverted] = useState<{id: string, fileName?: string} | null>(null);
-  const [editingScheme, setEditingScheme] = useState<{id: string, fileName?: string} | null>(null);
   
   // Pagination State
   const [page, setPage] = useState(1);
@@ -227,36 +221,12 @@ export function HistoryPage() {
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setViewingFile({ id: row.id, fileName: row.fileName });
-                }}
-                title="View File"
-              >
-                <FileText className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEditingConverted({ id: row.id, fileName: row.fileName });
+                  navigate(`/edit-orders/${row.id}`);
                 }}
                 title="Edit Converted Orders"
               >
                 <Edit className="w-4 h-4 text-blue-600" />
               </Button>
-              {row.schemeSummary?.count > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditingScheme({ id: row.id, fileName: row.fileName });
-                  }}
-                  title="Edit Schemes"
-                >
-                  <Edit className="w-4 h-4 text-yellow-600" />
-                </Button>
-              )}
               
               {/* DOWNLOAD BUTTONS */}
               {row.downloadUrls && row.downloadUrls.length > 0 ? (
@@ -479,22 +449,51 @@ export function HistoryPage() {
               <div>
                 <p className="text-sm text-neutral-600 mb-1">Upload Date</p>
                 <p className="font-medium text-neutral-900">
-                  {selectedLog.uploadDate ? new Date(selectedLog.uploadDate).toLocaleString() : '-'}
+                  {(() => {
+                    const dateValue = selectedLog.createdAt || selectedLog.uploadDate || selectedLog.createdAtText;
+                    if (!dateValue) return '-';
+                    
+                    if (typeof dateValue === 'string' && dateValue.includes(',')) {
+                      return dateValue;
+                    }
+
+                    const date = new Date(dateValue);
+                    if (isNaN(date.getTime())) return 'Invalid Date';
+                    
+                    return date.toLocaleString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    });
+                  })()}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-neutral-600 mb-1">Processing Time</p>
                 <p className="font-medium text-neutral-900">
-                  {selectedLog.processingTime && selectedLog.processingTime !== '-' 
-                    ? typeof selectedLog.processingTime === 'number'
-                      ? `${(selectedLog.processingTime / 1000).toFixed(2)}s`
-                      : selectedLog.processingTime
-                    : 'N/A'}
+                  {(() => {
+                    const procTime = selectedLog.processingTime || selectedLog.processingTimeMs;
+                    if (!procTime || procTime === '-') return 'N/A';
+                    
+                    if (typeof procTime === 'number') {
+                      return `${(procTime / 1000).toFixed(2)}s`;
+                    }
+                    return procTime;
+                  })()}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-neutral-600 mb-1">Records Processed</p>
-                <p className="font-medium text-neutral-900">{selectedLog.recordsProcessed}</p>
+                <p className="font-medium text-neutral-900">
+                  {(() => {
+                    const processed = typeof selectedLog.recordsProcessed === 'number' 
+                      ? selectedLog.recordsProcessed 
+                      : (selectedLog.processed ?? selectedLog.successCount ?? 0);
+                    return processed;
+                  })()}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-neutral-600 mb-1">Records Failed</p>
@@ -539,42 +538,6 @@ export function HistoryPage() {
           </div>
         )}
       </CustomModal>
-
-      {/* File Viewer Modal */}
-      {viewingFile && (
-        <FileViewerModal
-          isOpen={!!viewingFile}
-          onClose={() => setViewingFile(null)}
-          orderId={viewingFile.id}
-          fileName={viewingFile.fileName}
-        />
-      )}
-
-      {/* Edit Converted Orders Modal */}
-      {editingConverted && (
-        <ViewEditConvertedModal
-          isOpen={!!editingConverted}
-          onClose={() => {
-            setEditingConverted(null);
-            fetchHistory(); // Refresh history after editing
-          }}
-          uploadId={editingConverted.id}
-          fileName={editingConverted.fileName}
-        />
-      )}
-
-      {/* Edit Scheme Modal */}
-      {editingScheme && (
-        <ViewEditSchemeModal
-          isOpen={!!editingScheme}
-          onClose={() => {
-            setEditingScheme(null);
-            fetchHistory(); // Refresh history after editing
-          }}
-          uploadId={editingScheme.id}
-          fileName={editingScheme.fileName}
-        />
-      )}
     </div>
   );
 }

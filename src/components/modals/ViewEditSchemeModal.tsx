@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Modal } from "../Modal";
+import { ConfirmationModal } from "../ConfirmationModal";
 import { previewSchemeData, updateSchemeData, downloadSchemeFile } from "../../services/orderApi";
 import { Download, Save, AlertCircle, CheckCircle } from "lucide-react";
 
@@ -28,6 +29,7 @@ export function ViewEditSchemeModal({
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const limit = 50;
+  const [showConfirmClose, setShowConfirmClose] = useState(false);
   
   // 🔥 Store original scheme ratios for proportional recalculation
   // Format: { [index]: { baseOrderQty, baseFreeQty } }
@@ -139,13 +141,16 @@ const handleEdit = (index: number, field: string, value: string) => {
 
   const handleClose = () => {
     if (hasChanges) {
-      if (confirm("You have unsaved changes. Are you sure you want to close?")) {
-        setHasChanges(false);
-        onClose();
-      }
+      setShowConfirmClose(true);
     } else {
       onClose();
     }
+  };
+
+  const handleConfirmClose = () => {
+    setHasChanges(false);
+    setShowConfirmClose(false);
+    onClose();
   };
 
   const footer = (
@@ -175,6 +180,7 @@ const handleEdit = (index: number, field: string, value: string) => {
   );
 
   return (
+    <>
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
@@ -309,5 +315,17 @@ const handleEdit = (index: number, field: string, value: string) => {
         </div>
       )}
     </Modal>
+
+    <ConfirmationModal
+      isOpen={showConfirmClose}
+      onClose={() => setShowConfirmClose(false)}
+      onConfirm={handleConfirmClose}
+      title="Unsaved Changes"
+      message="You have unsaved changes. Are you sure you want to close?"
+      confirmText="Close Anyway"
+      cancelText="Keep Editing"
+      variant="warning"
+    />
+  </>
   );
 }
