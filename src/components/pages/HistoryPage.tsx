@@ -423,7 +423,7 @@ export function HistoryPage() {
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm"
-                    variant="secondary"
+                    
                     disabled={!pagination?.hasPrev || paginating}
                     onClick={() => setPage(p => Math.max(1, p - 1))}
                   >
@@ -431,7 +431,7 @@ export function HistoryPage() {
                   </Button>
                   <Button
                     size="sm"
-                    variant="secondary"
+                  
                     disabled={!pagination?.hasNext || paginating}
                     onClick={() => setPage(p => p + 1)}
                   >
