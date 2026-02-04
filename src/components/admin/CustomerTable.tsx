@@ -4,7 +4,7 @@ import { masterDataApi } from "../../services/masterDataApi";
 import { Button } from "../Button";
 import { Card } from "../Card";
 import { Input } from "../Input";
-import { Trash2, Edit2, Plus, Eye } from "lucide-react";
+import { Trash2, Edit2, Plus, Eye, RefreshCw } from "lucide-react";
 import { CustomModal } from "../Modal";
 
 interface Customer {
@@ -38,7 +38,8 @@ export function CustomerTable() {
   const [page, setPage] = useState(1);
   const limit = 10;
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [paginating, setPaginating] = useState(false);
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -70,7 +71,9 @@ export function CustomerTable() {
 
   const loadCustomers = async () => {
     try {
-      setLoading(true);
+      if (!loading) {
+        setPaginating(true);
+      }
       const res = await masterDataApi.getCustomers(search, page, limit);
       setCustomers(res.data || []);
       setTotal(res.total || 0);
@@ -79,6 +82,7 @@ export function CustomerTable() {
       setCustomers([]);
     } finally {
       setLoading(false);
+      setPaginating(false);
     }
   };
 
@@ -91,6 +95,7 @@ export function CustomerTable() {
 
   useEffect(() => {
     loadCustomers();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [page, search]);
 
   const handleCreate = () => {
@@ -170,8 +175,28 @@ export function CustomerTable() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-neutral-50 z-50 flex flex-col items-center justify-center space-y-4">
+        <RefreshCw className="w-8 h-8 animate-spin text-primary-600" />
+        <div className="text-center">
+          <p className="text-lg font-medium text-neutral-700">Loading customers</p>
+          <p className="text-sm text-neutral-500 mt-1">Please wait...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Card>
+      {paginating && (
+        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in">
+          <div className="flex flex-col items-center gap-3">
+            <RefreshCw className="w-8 h-8 animate-spin text-primary-600" />
+            <p className="text-sm font-medium text-neutral-700">Loading page {page}...</p>
+          </div>
+        </div>
+      )}
       <div className="flex justify-between items-center mb-3">
         <h3 className="text-lg font-semibold">Customers ({total})</h3>
         <div className="flex gap-2">
@@ -223,7 +248,7 @@ export function CustomerTable() {
         onChange={(e) => setSearch(e.target.value)}
       />
 
-      <div className="mt-4 overflow-x-auto">
+      <div className={`mt-4 overflow-x-auto ${paginating ? 'opacity-50 pointer-events-none' : ''}`}>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b">
@@ -236,13 +261,7 @@ export function CustomerTable() {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={6} className="text-center p-4">
-                  Loading...
-                </td>
-              </tr>
-            ) : customers.length === 0 ? (
+            {customers.length === 0 ? (
               <tr>
                 <td colSpan={6} className="text-center p-4 text-neutral-500">
                   No customers found
@@ -287,14 +306,14 @@ export function CustomerTable() {
       </div>
 
       <div className="flex justify-end gap-2 mt-4">
-        <Button disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
+        <Button disabled={page === 1 || paginating} onClick={() => setPage((p) => p - 1)}>
           Prev
         </Button>
         <span className="px-3 py-2 text-sm">
           Page {page} of {Math.ceil(total / limit) || 1}
         </span>
         <Button
-          disabled={page * limit >= total}
+          disabled={page * limit >= total || paginating}
           onClick={() => setPage((p) => p + 1)}
         >
           Next

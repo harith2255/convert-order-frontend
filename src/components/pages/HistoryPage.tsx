@@ -23,6 +23,7 @@ export function HistoryPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [paginating, setPaginating] = useState(false); // Separate state for pagination loading
   const [downloading, setDownloading] = useState<string | null>(null);
   const [viewingFile, setViewingFile] = useState<{id: string, fileName?: string} | null>(null);
   const [editingConverted, setEditingConverted] = useState<{id: string, fileName?: string} | null>(null);
@@ -55,10 +56,17 @@ export function HistoryPage() {
   // Fetch when page or debounced params change
   useEffect(() => {
     fetchHistory();
+    // Smooth scroll to top when page changes
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [page, debouncedSearch, debouncedStatus]);
 
   const fetchHistory = async () => {
     try {
+      // Show paginating state only if initial load is complete
+      if (!loading) {
+        setPaginating(true);
+      }
+      
       const res = await api.get("/orders/history", {
         params: {
           page,
@@ -97,6 +105,7 @@ export function HistoryPage() {
       setHistory([]);
     } finally {
       setLoading(false);
+      setPaginating(false);
     }
   };
 
@@ -310,8 +319,12 @@ export function HistoryPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-neutral-600">Loading order history…</p>
+      <div className="fixed inset-0 bg-neutral-50 z-50 flex flex-col items-center justify-center space-y-4">
+        <RefreshCw className="w-8 h-8 animate-spin text-primary-600" />
+        <div className="text-center">
+          <p className="text-lg font-medium text-neutral-700">Loading order history</p>
+          <p className="text-sm text-neutral-500 mt-1">Please wait...</p>
+        </div>
       </div>
     );
   }
@@ -389,7 +402,18 @@ export function HistoryPage() {
         </div>
         {history.length > 0 ? (
           <>
-            <Table columns={columns} data={history} />
+            {/* Table with Pagination Loading Overlay */}
+            {paginating && (
+              <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in">
+                <div className="flex flex-col items-center gap-3">
+                  <RefreshCw className="w-8 h-8 animate-spin text-primary-600" />
+                  <p className="text-sm font-medium text-neutral-700">Loading page {page}...</p>
+                </div>
+              </div>
+            )}
+            <div className={paginating ? "opacity-50 pointer-events-none" : ""}>
+              <Table columns={columns} data={history} />
+            </div>
             <div className="p-4 border-t border-neutral-200 bg-neutral-50">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                 <p className="text-sm text-neutral-600">
@@ -400,7 +424,7 @@ export function HistoryPage() {
                   <Button
                     size="sm"
                     variant="secondary"
-                    disabled={!pagination?.hasPrev}
+                    disabled={!pagination?.hasPrev || paginating}
                     onClick={() => setPage(p => Math.max(1, p - 1))}
                   >
                     Previous
@@ -408,7 +432,7 @@ export function HistoryPage() {
                   <Button
                     size="sm"
                     variant="secondary"
-                    disabled={!pagination?.hasNext}
+                    disabled={!pagination?.hasNext || paginating}
                     onClick={() => setPage(p => p + 1)}
                   >
                     Next

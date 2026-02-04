@@ -32,7 +32,8 @@ export function SchemeTable({ refreshTrigger }: SchemeTableProps) {
   const [page, setPage] = useState(1);
   const limit = 20;
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [paginating, setPaginating] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState(false);
@@ -49,7 +50,9 @@ export function SchemeTable({ refreshTrigger }: SchemeTableProps) {
 
   const loadSchemes = async () => {
     try {
-      setLoading(true);
+      if (!loading) {
+        setPaginating(true);
+      }
       const res = await masterDataApi.getSchemes(search, page, limit);
       
       console.log("Schemes API Response:", res); // Debug log
@@ -68,11 +71,13 @@ export function SchemeTable({ refreshTrigger }: SchemeTableProps) {
       setSchemes([]);
     } finally {
       setLoading(false);
+      setPaginating(false);
     }
   };
 
   useEffect(() => {
     loadSchemes();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [page, search, refreshTrigger]);
 
   const openCreate = () => {
@@ -140,10 +145,30 @@ export function SchemeTable({ refreshTrigger }: SchemeTableProps) {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-neutral-50 z-50 flex flex-col items-center justify-center space-y-4">
+        <RefreshCw className="w-8 h-8 animate-spin text-primary-600" />
+        <div className="text-center">
+          <p className="text-lg font-medium text-neutral-700">Loading schemes</p>
+          <p className="text-sm text-neutral-500 mt-1">Please wait...</p>
+        </div>
+      </div>
+    );
+  }
+
   const totalPages = Math.ceil(total / limit);
 
   return (
     <Card>
+      {paginating && (
+        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in">
+          <div className="flex flex-col items-center gap-3">
+            <RefreshCw className="w-8 h-8 animate-spin text-primary-600" />
+            <p className="text-sm font-medium text-neutral-700">Loading page {page}...</p>
+          </div>
+        </div>
+      )}
       <div className="flex justify-between items-center mb-3">
         <h3 className="text-lg font-semibold">
           Schemes ({total})
@@ -200,7 +225,7 @@ export function SchemeTable({ refreshTrigger }: SchemeTableProps) {
         className="mb-3"
       />
 
-      <div className="overflow-x-auto">
+      <div className={`overflow-x-auto ${paginating ? 'opacity-50 pointer-events-none' : ''}`}>
         <table className="w-full text-sm">
           <thead className="bg-neutral-100">
             <tr className="border-b">
@@ -215,14 +240,7 @@ export function SchemeTable({ refreshTrigger }: SchemeTableProps) {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={8} className="text-center p-8">
-                  <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-primary-600" />
-                  <p className="text-neutral-500">Loading schemes...</p>
-                </td>
-              </tr>
-            ) : schemes.length === 0 ? (
+            {schemes.length === 0 ? (
               <tr>
                 <td colSpan={8} className="text-center p-8 text-neutral-500">
                   {search ? "No schemes found matching your search" : "No schemes configured yet"}
@@ -293,7 +311,7 @@ export function SchemeTable({ refreshTrigger }: SchemeTableProps) {
               size="sm"
               variant="secondary"
               onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
+              disabled={page === 1 || paginating}
             >
               Previous
             </Button>
@@ -301,7 +319,7 @@ export function SchemeTable({ refreshTrigger }: SchemeTableProps) {
               size="sm"
               variant="secondary"
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
+              disabled={page === totalPages || paginating}
             >
               Next
             </Button>

@@ -15,6 +15,7 @@ import {
   Upload,
   Search, // ✅ Import Search
   Trash2, // ✅ Import Trash2
+  RefreshCw, // ✅ Import RefreshCw for loading animation
 } from "lucide-react";
 
 import { Card } from "../Card";
@@ -56,6 +57,10 @@ export function AdminDashboard({ }: AdminDashboardProps) {
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState(""); // ✅ Search State
+  
+  // ✅ Loading States
+  const [loading, setLoading] = useState(true);
+  const [paginating, setPaginating] = useState(false);
 
   // ✅ NEW: Modal State
   // Modal logic replaced by direct navigation to ResultPage
@@ -92,29 +97,36 @@ export function AdminDashboard({ }: AdminDashboardProps) {
   };
 
   const loadUploads = async (pageNo = 1, search = searchTerm) => {
-    const res = await api.get("/admin/master/audits", {
-      params: { page: pageNo, limit: 10, search }, // ✅ Pass search param
-    });
+    try {
+      if (!loading) {
+        setPaginating(true);
+      }
+      const res = await api.get("/admin/master/audits", {
+        params: { page: pageNo, limit: 10, search }, // ✅ Pass search param
+      });
 
-    setUploads(
-      res.data.data.map((u: any) => ({
-        id: u._id,
-        file: u.fileName,
-        user: u.user?.email || "Unknown",
-        status: u.status,
-        processed: u.processed || 0,
-        failed: u.failed || 0,
-        time: u.createdAt ? new Date(u.createdAt).toLocaleString() : "N/A",
-      }))
-    );
+      setUploads(
+        res.data.data.map((u: any) => ({
+          id: u._id,
+          file: u.fileName,
+          user: u.user?.email || "Unknown",
+          status: u.status,
+          processed: u.processed || 0,
+          failed: u.failed || 0,
+          time: u.createdAt ? new Date(u.createdAt).toLocaleString() : "N/A",
+        }))
+      );
 
-    const p = res.data.pagination;
-    setPagination({
-      ...p,
-      hasPrev: Number(p.page) > 1,
-      hasNext: Number(p.page) < Number(p.totalPages)
-    });
-    setPage(pageNo);
+      const p = res.data.pagination;
+      setPagination({
+        ...p,
+        hasPrev: Number(p.page) > 1,
+        hasNext: Number(p.page) < Number(p.totalPages)
+      });
+      setPage(pageNo);
+    } finally {
+      setPaginating(false);
+    }
   };
 
   // Export button
@@ -183,8 +195,12 @@ export function AdminDashboard({ }: AdminDashboardProps) {
   };
 
   useEffect(() => {
-    loadDashboard();
-    loadUploads(1);
+    const initLoad = async () => {
+      await loadDashboard();
+      await loadUploads(1);
+      setLoading(false);
+    };
+    initLoad();
   }, []);
 
   // Debounce search
@@ -199,6 +215,10 @@ export function AdminDashboard({ }: AdminDashboardProps) {
     const interval = setInterval(loadDashboard, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [page]);
 
   const uploadColumns = [
     { 
@@ -236,8 +256,28 @@ export function AdminDashboard({ }: AdminDashboardProps) {
 
 
 
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-neutral-50 z-50 flex flex-col items-center justify-center space-y-4">
+        <RefreshCw className="w-8 h-8 animate-spin text-primary-600" />
+        <div className="text-center">
+          <p className="text-lg font-medium text-neutral-700">Loading admin dashboard</p>
+          <p className="text-sm text-neutral-500 mt-1">Please wait...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 mt-2"  >
+      {paginating && (
+        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in">
+          <div className="flex flex-col items-center gap-3">
+            <RefreshCw className="w-8 h-8 animate-spin text-primary-600" />
+            <p className="text-sm font-medium text-neutral-700">Loading page {page}...</p>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between p-">
         <div >
@@ -326,21 +366,23 @@ export function AdminDashboard({ }: AdminDashboardProps) {
           </div>
         </div>
 
-        {uploads.length === 0 ? (
-          <p className="text-sm text-neutral-500">No uploads yet</p>
-        ) : (
-          <Table 
-            columns={uploadColumns} 
-            data={uploads} 
-            onRowClick={handleUploadClick} // ✅ Make clickable
-          />
-        )}
+        <div className={paginating ? 'opacity-50 pointer-events-none' : ''}>
+          {uploads.length === 0 ? (
+            <p className="text-sm text-neutral-500">No uploads yet</p>
+          ) : (
+            <Table 
+              columns={uploadColumns} 
+              data={uploads} 
+              onRowClick={handleUploadClick} // ✅ Make clickable
+            />
+          )}
+        </div>
 
         <div className="flex justify-between items-center mt-4">
           <Button
             size="sm"
             variant="secondary"
-            disabled={!pagination?.hasPrev}
+            disabled={!pagination?.hasPrev || paginating}
             onClick={() => loadUploads(page - 1)}
           >
             Previous
@@ -353,7 +395,7 @@ export function AdminDashboard({ }: AdminDashboardProps) {
           <Button
             size="sm"
             variant="secondary"
-            disabled={!pagination?.hasNext}
+            disabled={!pagination?.hasNext || paginating}
             onClick={() => loadUploads(page + 1)}
           >
             Next

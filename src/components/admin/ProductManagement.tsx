@@ -4,7 +4,7 @@ import { masterDataApi } from "../../services/masterDataApi";
 import { Button } from "../Button";
 import { Card } from "../Card";
 import { Input } from "../Input";
-import { Trash2, Edit2, Plus, Eye } from "lucide-react";
+import { Trash2, Edit2, Plus, Eye, RefreshCw } from "lucide-react";
 import { CustomModal } from "../Modal";
 import { Autocomplete } from "../Autocomplete";
 
@@ -31,7 +31,8 @@ export function ProductManagement({ onDataChange }: ProductManagementProps) {
   const [page, setPage] = useState(1);
   const limit = 50; 
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [paginating, setPaginating] = useState(false);
   const [divisions, setDivisions] = useState<string[]>([]);
 
   // Edit/Create state 
@@ -47,7 +48,9 @@ export function ProductManagement({ onDataChange }: ProductManagementProps) {
 
   const loadProducts = async () => {
     try {
-      setLoading(true);
+      if (!loading) {
+        setPaginating(true);
+      }
       const res = await masterDataApi.getProducts(search, page, limit);
       setProducts(res.data || []);
       setTotal(res.total || 0);
@@ -56,6 +59,7 @@ export function ProductManagement({ onDataChange }: ProductManagementProps) {
       setProducts([]);
     } finally {
       setLoading(false);
+      setPaginating(false);
     }
   };
 
@@ -81,6 +85,7 @@ export function ProductManagement({ onDataChange }: ProductManagementProps) {
 
   useEffect(() => {
     loadProducts();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [page, search]);
 
   const handleCreate = () => {
@@ -157,8 +162,28 @@ export function ProductManagement({ onDataChange }: ProductManagementProps) {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-neutral-50 z-50 flex flex-col items-center justify-center space-y-4">
+        <RefreshCw className="w-8 h-8 animate-spin text-primary-600" />
+        <div className="text-center">
+          <p className="text-lg font-medium text-neutral-700">Loading products</p>
+          <p className="text-sm text-neutral-500 mt-1">Please wait...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Card>
+      {paginating && (
+        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in">
+          <div className="flex flex-col items-center gap-3">
+            <RefreshCw className="w-8 h-8 animate-spin text-primary-600" />
+            <p className="text-sm font-medium text-neutral-700">Loading page {page}...</p>
+          </div>
+        </div>
+      )}
       <div className="flex justify-between items-center mb-3">
         <h3 className="text-lg font-semibold">Products ({total})</h3>
         <div className="flex gap-2">
@@ -210,7 +235,7 @@ export function ProductManagement({ onDataChange }: ProductManagementProps) {
         onChange={(e) => setSearch(e.target.value)}
       />
 
-      <div className="mt-4 overflow-x-auto">
+      <div className={`mt-4 overflow-x-auto ${paginating ? 'opacity-50 pointer-events-none' : ''}`}>
         <table className="w-full">
           <thead>
             <tr className="border-b">
@@ -222,13 +247,7 @@ export function ProductManagement({ onDataChange }: ProductManagementProps) {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={5} className="text-center p-4">
-                  Loading...
-                </td>
-              </tr>
-            ) : products.length === 0 ? (
+            {products.length === 0 ? (
               <tr>
                 <td colSpan={5} className="text-center p-4 text-neutral-500">
                   No products found
@@ -272,7 +291,7 @@ export function ProductManagement({ onDataChange }: ProductManagementProps) {
       </div>
 
       <div className="flex justify-end gap-2 mt-4">
-        <Button size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
+        <Button size="sm" disabled={page === 1 || paginating} onClick={() => setPage((p) => p - 1)}>
           Prev
         </Button>
         <span className="px-3 py-2 text-sm">
@@ -280,7 +299,7 @@ export function ProductManagement({ onDataChange }: ProductManagementProps) {
         </span>
         <Button
           size="sm"
-          disabled={page * limit >= total}
+          disabled={page * limit >= total || paginating}
           onClick={() => setPage((p) => p + 1)}
         >
           Next
