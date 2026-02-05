@@ -1,25 +1,18 @@
+import React from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-export default function ProtectedRoute({
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  role?: "admin" | "user";
+}
+
+// Memoized to prevent unnecessary re-renders during navigation
+const ProtectedRoute = React.memo(function ProtectedRoute({
   children,
   role,
-}: {
-  children: JSX.Element;
-  role?: "admin" | "user";
-}) {
-  const { user, loading } = useAuth();
-
-  /* ------------------------
-     WAIT FOR AUTH LOAD
-  ------------------------- */
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center text-gray-400">
-        Loading...
-      </div>
-    );
-  }
+}: ProtectedRouteProps) {
+  const { user } = useAuth();
 
   /* ------------------------
      NOT LOGGED IN
@@ -32,8 +25,11 @@ export default function ProtectedRoute({
      ROLE CHECK
   ------------------------- */
   if (role && user.role !== role) {
-    return <Navigate to="/unauthorized" replace />;
+    return <Navigate to="/" replace />;
   }
 
-  return children;
-}
+  return <>{children}</>;
+});
+
+export default ProtectedRoute;
+

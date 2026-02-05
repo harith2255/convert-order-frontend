@@ -302,7 +302,7 @@ export function HistoryPage() {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-neutral-50 z-50 flex flex-col items-center justify-center space-y-4">
+      <div className="flex flex-col items-center justify-center h-full min-h-[50vh] space-y-4">
         <RefreshCw className="w-8 h-8 animate-spin text-primary-600" />
         <div className="text-center">
           <p className="text-lg font-medium text-neutral-700">Loading order history</p>
@@ -374,7 +374,7 @@ export function HistoryPage() {
       </div>
 
       {/* History Table */}
-      <Card padding="none">
+      <Card padding="none" className="relative">
         <div className="p-6 border-b border-neutral-200">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-neutral-900">Conversion History</h3>
@@ -387,7 +387,7 @@ export function HistoryPage() {
           <>
             {/* Table with Pagination Loading Overlay */}
             {paginating && (
-              <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in">
+              <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex items-center justify-center animate-fade-in rounded-lg">
                 <div className="flex flex-col items-center gap-3">
                   <RefreshCw className="w-8 h-8 animate-spin text-primary-600" />
                   <p className="text-sm font-medium text-neutral-700">Loading page {page}...</p>

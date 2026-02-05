@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   FileText,
   History,
@@ -20,7 +20,21 @@ interface SidebarProps {
   onMobileMenuToggle?: () => void;
 }
 
-export function Sidebar({
+// Move menu items outside component to prevent re-creation on every render
+const USER_MENU_ITEMS = [
+  { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/upload", label: "Upload Order", icon: Upload },
+  { to: "/history", label: "Order History", icon: History },
+];
+
+const ADMIN_MENU_ITEMS = [
+  { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/upload", label: "Convert Order", icon: Upload },
+  { to: "/admin/master-data", label: "Master Data", icon: Map },
+  { to: "/admin/user-access", label: "User Access", icon: Users },
+];
+
+export const Sidebar = React.memo(function Sidebar({
   userRole,
   onLogout,
   isMobileMenuOpen = false,
@@ -29,21 +43,11 @@ export function Sidebar({
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const userMenuItems = [
-    { to: "/", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/upload", label: "Upload Order", icon: Upload },
-    { to: "/history", label: "Order History", icon: History },
-  ];
-
-  const adminMenuItems = [
-    { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/upload", label: "Convert Order", icon: Upload }, // ✅ Moved to Sidebar
-    // { to: "/admin/mapping-rules", label: "Mapping Rules", icon: Map },
-    { to:"/admin/master-data", label: "Master Data", icon: Map },
-    { to: "/admin/user-access", label: "User Access", icon: Users },
-  ];
-
-  const menuItems = userRole === "admin" ? adminMenuItems : userMenuItems;
+  // Memoize menu items selection
+  const menuItems = useMemo(
+    () => (userRole === "admin" ? ADMIN_MENU_ITEMS : USER_MENU_ITEMS),
+    [userRole]
+  );
 
   const handleLogout = () => {
     onLogout();
@@ -163,4 +167,4 @@ export function Sidebar({
       </aside>
     </>
   );
-}
+});

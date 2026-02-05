@@ -177,7 +177,7 @@ export function CustomerTable() {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-neutral-50 z-50 flex flex-col items-center justify-center space-y-4">
+      <div className="flex flex-col items-center justify-center h-full min-h-[50vh] space-y-4">
         <RefreshCw className="w-8 h-8 animate-spin text-primary-600" />
         <div className="text-center">
           <p className="text-lg font-medium text-neutral-700">Loading customers</p>
@@ -188,9 +188,9 @@ export function CustomerTable() {
   }
 
   return (
-    <Card>
+    <Card className="relative">
       {paginating && (
-        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in">
+        <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex items-center justify-center animate-fade-in rounded-lg">
           <div className="flex flex-col items-center gap-3">
             <RefreshCw className="w-8 h-8 animate-spin text-primary-600" />
             <p className="text-sm font-medium text-neutral-700">Loading page {page}...</p>

@@ -4,6 +4,7 @@ import React, {
   useEffect,
   useState,
   useCallback,
+  useMemo,
 } from "react";
 import api from "../services/api";
 
@@ -11,6 +12,7 @@ interface User {
   id: string;
   role: "admin" | "user";
   email: string;
+  name?: string;
 }
 
 interface AuthContextType {
@@ -65,21 +67,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   /* ----------------------------------
      LOGIN
   ----------------------------------- */
-  const login = async (token: string) => {
+  const login = useCallback(async (token: string) => {
     localStorage.setItem("auth_token", token);
 
     // IMPORTANT: wait until user is fetched
     const res = await api.get("/auth/me");
     setUser(res.data);
-  };
+  }, []);
 
   /* ----------------------------------
      LOGOUT
   ----------------------------------- */
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem("auth_token");
     setUser(null);
-  };
+  }, []);
+
+  // Memoize the context value to prevent unnecessary re-renders
+  const contextValue = useMemo(
+    () => ({ user, loading, login, logout }),
+    [user, loading, login, logout]
+  );
 
   /* ----------------------------------
      BLOCK UI UNTIL AUTH IS READY
@@ -93,7 +101,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
