@@ -331,7 +331,7 @@ export function ProductManagement({ onDataChange }: ProductManagementProps) {
                 setFormData({ ...formData, productCode: e.target.value })
               }
               placeholder="Enter product code"
-              disabled={viewMode || !!editingProduct} 
+              disabled={viewMode} 
             />
           </div>
 
