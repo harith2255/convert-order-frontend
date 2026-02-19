@@ -5,9 +5,24 @@ export const getOrderResult = async (id: string) => {
   return data;
 };
 
-// Helper to get clean filename base
-const getBaseName = (fileName: string) => {
-  return fileName?.split('.').slice(0, -1).join('.') || fileName || "file";
+// ============ COD SEQUENTIAL NAMING SYSTEM ============
+// Each unique upload gets a persistent COD number (COD1, COD2, etc.)
+// Stored in localStorage for persistence across sessions
+
+const getCodNumber = (uploadId: string): number => {
+  // Get existing mapping
+  const mappingStr = localStorage.getItem("codMapping");
+  const mapping: Record<string, number> = mappingStr ? JSON.parse(mappingStr) : {};
+
+  // If this upload already has a COD number, return it
+  if (mapping[uploadId]) return mapping[uploadId];
+
+  // Assign next number
+  const counter = Number(localStorage.getItem("codCounter") || "0") + 1;
+  mapping[uploadId] = counter;
+  localStorage.setItem("codCounter", String(counter));
+  localStorage.setItem("codMapping", JSON.stringify(mapping));
+  return counter;
 };
 
 export const downloadOrderFile = async (id: string, originalFileName?: string, type?: 'sheets' | 'main') => {
@@ -35,10 +50,18 @@ export const downloadOrderFile = async (id: string, originalFileName?: string, t
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
     
-    // Construct filename
-    const name = originalFileName 
-      ? `${getBaseName(originalFileName)}_converted.xlsx`
-      : `converted_order_${id}.xlsx`;
+    // COD-based filename
+    const codNum = getCodNumber(id);
+    const codBase = `COD${codNum}`;
+    let name: string;
+
+    if (type === 'sheets') {
+      name = `${codBase}-Sheets.xlsx`;
+    } else if (type === 'main') {
+      name = `${codBase}.xlsx`;
+    } else {
+      name = `${codBase}.xlsx`;
+    }
 
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -78,10 +101,9 @@ export const downloadSchemeFile = async (id: string, originalFileName?: string) 
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   });
 
-  // Construct filename
-  const name = originalFileName 
-    ? `${getBaseName(originalFileName)}_scheme_summary.xlsx`
-    : `scheme-summary-${id}.xlsx`;
+  // COD-based filename for summary
+  const codNum = getCodNumber(id);
+  const name = `COD${codNum}-Summary.xlsx`;
 
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement("a");
