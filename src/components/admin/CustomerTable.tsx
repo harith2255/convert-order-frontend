@@ -6,6 +6,7 @@ import { Card } from "../Card";
 import { Input } from "../Input";
 import { Trash2, Edit2, Plus, Eye, RefreshCw } from "lucide-react";
 import { CustomModal } from "../Modal";
+import { useAuth } from "../../context/AuthContext";
 
 interface Customer {
   _id: string;
@@ -33,6 +34,8 @@ interface Customer {
 }
 
 export function CustomerTable() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -349,7 +352,7 @@ export function CustomerTable() {
                   onChange={(e) =>
                     setFormData({ ...formData, customerCode: e.target.value })
                   }
-                  disabled={viewMode || !!editingCustomer}
+                  disabled={viewMode || !isAdmin}
                   placeholder="e.g., C5001"
                 />
               </div>
@@ -363,7 +366,7 @@ export function CustomerTable() {
                   onChange={(e) =>
                     setFormData({ ...formData, customerType: e.target.value })
                   }
-                  disabled={viewMode}
+                  disabled={viewMode || !isAdmin}
                   placeholder="e.g., Stockiest"
                 />
               </div>
@@ -377,7 +380,7 @@ export function CustomerTable() {
                   onChange={(e) =>
                     setFormData({ ...formData, customerName: e.target.value })
                   }
-                  disabled={viewMode}
+                  disabled={viewMode || !isAdmin}
                   placeholder="Enter full customer name"
                 />
               </div>
@@ -397,7 +400,7 @@ export function CustomerTable() {
                   onChange={(e) =>
                     setFormData({ ...formData, address1: e.target.value })
                   }
-                  disabled={viewMode}
+                  disabled={viewMode || !isAdmin}
                   placeholder="Address Line 1"
                   className="mb-2"
                 />
@@ -407,7 +410,7 @@ export function CustomerTable() {
                     onChange={(e) =>
                       setFormData({ ...formData, address2: e.target.value })
                     }
-                    disabled={viewMode}
+                    disabled={viewMode || !isAdmin}
                     placeholder="Address Line 2"
                   />
                   <Input
@@ -415,7 +418,7 @@ export function CustomerTable() {
                     onChange={(e) =>
                       setFormData({ ...formData, address3: e.target.value })
                     }
-                    disabled={viewMode}
+                    disabled={viewMode || !isAdmin}
                     placeholder="Address Line 3"
                   />
                 </div>
@@ -428,7 +431,7 @@ export function CustomerTable() {
                   onChange={(e) =>
                     setFormData({ ...formData, city: e.target.value })
                   }
-                  disabled={viewMode}
+                  disabled={viewMode || !isAdmin}
                 />
               </div>
 
@@ -439,7 +442,7 @@ export function CustomerTable() {
                   onChange={(e) =>
                     setFormData({ ...formData, state: e.target.value })
                   }
-                  disabled={viewMode}
+                  disabled={viewMode || !isAdmin}
                 />
               </div>
 
@@ -450,7 +453,7 @@ export function CustomerTable() {
                   onChange={(e) =>
                     setFormData({ ...formData, pinCode: e.target.value })
                   }
-                  disabled={viewMode}
+                  disabled={viewMode || !isAdmin}
                 />
               </div>
 
@@ -462,7 +465,7 @@ export function CustomerTable() {
                   onChange={(e) =>
                     setFormData({ ...formData, email: e.target.value })
                   }
-                  disabled={viewMode}
+                  disabled={viewMode || !isAdmin}
                   placeholder="example@mail.com"
                 />
               </div>
@@ -474,7 +477,7 @@ export function CustomerTable() {
                   onChange={(e) =>
                     setFormData({ ...formData, phoneNo1: e.target.value })
                   }
-                  disabled={viewMode}
+                  disabled={viewMode || !isAdmin}
                 />
               </div>
 
@@ -485,7 +488,7 @@ export function CustomerTable() {
                   onChange={(e) =>
                     setFormData({ ...formData, mobileNo: e.target.value })
                   }
-                  disabled={viewMode}
+                  disabled={viewMode || !isAdmin}
                 />
               </div>
             </div>
@@ -502,7 +505,7 @@ export function CustomerTable() {
                   onChange={(e) =>
                     setFormData({ ...formData, drugLicNo: e.target.value })
                   }
-                  disabled={viewMode}
+                  disabled={viewMode || !isAdmin}
                   placeholder="License Number"
                 />
               </div>
@@ -515,7 +518,7 @@ export function CustomerTable() {
                   onChange={(e) =>
                     setFormData({ ...formData, drugLicFromDt: e.target.value })
                   }
-                  disabled={viewMode}
+                  disabled={viewMode || !isAdmin}
                 />
               </div>
 
@@ -527,7 +530,7 @@ export function CustomerTable() {
                   onChange={(e) =>
                     setFormData({ ...formData, drugLicToDt: e.target.value })
                   }
-                  disabled={viewMode}
+                  disabled={viewMode || !isAdmin}
                 />
               </div>
 
@@ -538,7 +541,7 @@ export function CustomerTable() {
                   onChange={(e) =>
                     setFormData({ ...formData, gstNo: e.target.value })
                   }
-                  disabled={viewMode}
+                  disabled={viewMode || !isAdmin}
                 />
               </div>
             </div>
@@ -548,3 +551,4 @@ export function CustomerTable() {
     </Card>
   );
 }
+
